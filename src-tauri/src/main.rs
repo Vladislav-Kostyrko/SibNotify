@@ -447,7 +447,7 @@ fn drag_panel(app: AppHandle) {
 }
 
 #[tauri::command]
-fn monitors(app: AppHandle) -> Value {
+async fn monitors(app: AppHandle) -> Result<Value, String> {
     let list = app.available_monitors().unwrap_or_default();
     let arr: Vec<Value> = list
         .iter()
@@ -464,11 +464,11 @@ fn monitors(app: AppHandle) -> Value {
             })
         })
         .collect();
-    json!(arr)
+    Ok(json!(arr))
 }
 
 #[tauri::command]
-fn set_monitor(app: AppHandle, idx: usize) {
+async fn set_monitor(app: AppHandle, idx: usize) -> Result<(), String> {
     {
         let st = app.state::<AppState>();
         let mut cfg = st.cfg.lock().unwrap();
@@ -476,6 +476,7 @@ fn set_monitor(app: AppHandle, idx: usize) {
         let _ = save_cfg(&app, &cfg);
     }
     place(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -534,10 +535,10 @@ fn notify(app: tauri::AppHandle, title: String, body: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn set_autostart(enabled: bool) -> Value {
+async fn set_autostart(enabled: bool) -> Result<Value, String> {
     let exe = match std::env::current_exe() {
         Ok(p) => p.to_string_lossy().to_string(),
-        Err(e) => return json!({"ok": false, "error": e.to_string()}),
+        Err(e) => return Ok(json!({"ok": false, "error": e.to_string()})),
     };
 
     #[cfg(target_os = "windows")]
@@ -563,8 +564,8 @@ fn set_autostart(enabled: bool) -> Value {
                 .output()
         };
         return match out {
-            Ok(o) => json!({"ok": o.status.success()}),
-            Err(e) => json!({"ok": false, "error": e.to_string()}),
+            Ok(o) => Ok(json!({"ok": o.status.success()})),
+            Err(e) => Ok(json!({"ok": false, "error": e.to_string()})),
         };
     }
 
@@ -591,8 +592,8 @@ fn set_autostart(enabled: bool) -> Value {
             }
         };
         return match res {
-            Ok(_) => json!({"ok": true}),
-            Err(e) => json!({"ok": false, "error": e.to_string()}),
+            Ok(_) => Ok(json!({"ok": true})),
+            Err(e) => Ok(json!({"ok": false, "error": e.to_string()})),
         };
     }
 
@@ -619,39 +620,39 @@ fn set_autostart(enabled: bool) -> Value {
             }
         };
         return match res {
-            Ok(_) => json!({"ok": true}),
-            Err(e) => json!({"ok": false, "error": e.to_string()}),
+            Ok(_) => Ok(json!({"ok": true})),
+            Err(e) => Ok(json!({"ok": false, "error": e.to_string()})),
         };
     }
 
     #[allow(unreachable_code)]
-    json!({"ok": false, "error": "не поддерживается на этой ОС"})
+    Ok(json!({"ok": false, "error": "не поддерживается на этой ОС"}))
 }
 
 #[tauri::command]
-fn autostart_state() -> Value {
+async fn autostart_state() -> Result<Value, String> {
     #[cfg(target_os = "windows")]
     {
         let key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
         let out = std::process::Command::new("reg")
             .args(["query", key, "/v", "SibNotify"])
             .output();
-        return json!({"on": out.map(|o| o.status.success()).unwrap_or(false)});
+        return Ok(json!({"on": out.map(|o| o.status.success()).unwrap_or(false)}));
     }
     #[cfg(target_os = "linux")]
     {
         let home = std::env::var("HOME").unwrap_or_default();
         let p = format!("{}/.config/autostart/sibnotify.desktop", home);
-        return json!({"on": std::path::Path::new(&p).exists()});
+        return Ok(json!({"on": std::path::Path::new(&p).exists()}));
     }
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var("HOME").unwrap_or_default();
         let p = format!("{}/Library/LaunchAgents/ru.sibtrans.notify.plist", home);
-        return json!({"on": std::path::Path::new(&p).exists()});
+        return Ok(json!({"on": std::path::Path::new(&p).exists()}));
     }
     #[allow(unreachable_code)]
-    json!({"on": false})
+    Ok(json!({"on": false}))
 }
 
 #[tauri::command]

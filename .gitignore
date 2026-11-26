@@ -9,3 +9,7 @@ target/
 .DS_Store
 Thumbs.db
 node_modules/
+
+# сборки не храним в репо
+package/SibNotify.exe
+dist/*.keep
