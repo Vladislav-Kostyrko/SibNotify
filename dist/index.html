@@ -44,7 +44,7 @@
   .iconbtn:hover{color:var(--txt);border-color:rgba(255,255,255,.25);}
 
   .grid{flex:1;overflow-y:auto;padding:4px 12px 10px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
-    grid-auto-flow:row dense;align-content:start;align-items:start;gap:8px;}
+    grid-auto-flow:row dense;align-content:start;align-items:stretch;gap:8px;}
   .grid::-webkit-scrollbar{width:7px;}
   .grid::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:6px;}
 
@@ -122,7 +122,7 @@
   .wx-h{display:flex;justify-content:space-between;font-size:0.81em;color:var(--dim);margin-top:8px;}
   .wx-d{display:flex;justify-content:space-between;font-size:0.81em;padding:2px 0;}
 
-  .addblock{margin:10px 0 18px;border:1px dashed rgba(255,255,255,.18);border-radius:12px;padding:10px;
+  .addblock{grid-column:1 / -1;margin:2px 0 8px;border:1px dashed rgba(255,255,255,.18);border-radius:12px;padding:9px;
     text-align:center;font-size:0.88em;color:var(--dim);cursor:pointer;flex:none;}
   .addblock:hover{border-color:var(--accent);color:var(--accent);background:rgba(74,163,255,.06);}
 
@@ -182,7 +182,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.10.3</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.10.4</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -429,7 +429,7 @@
     });
     g.innerHTML = (list.length ? list.map((b, i) => `
       <div class="blk${b.h ? '' : ' auto'}" data-i="${i}" data-type="${b.type}"
-           style="${b.h ? `height:${b.h}px;` : ''}${blkW(b)}">
+           style="${b.h ? `height:${b.h}px;` : ''}${blkW(b, g.clientWidth)}">
         <h3><span class="grip" title="Перетащи за шапку, чтобы поменять порядок">⠿</span><span class="ttl">${(TYPES[b.type] || {}).ic || '•'} ${esc(b.title || (TYPES[b.type] || {}).name || b.type)}</span>
           <span class="cnt" data-cnt="${i}">0</span>
           <span class="bh" data-cfg="${i}" title="Настроить">⚙</span>
@@ -464,7 +464,9 @@
   const SPAN_WP = { 3: 25, 4: 33, 6: 50, 8: 66, 9: 75, 12: 100 };
   const WP_SPAN = { 25: 3, 33: 4, 50: 6, 66: 8, 75: 9, 100: 12 };
   const spanOf = wp => WP_SPAN[wp] || GRID_COLS;
-  const blkW = b => `grid-column:span ${spanOf(b.wp)};`;
+  // на узкой панели мелкие блоки всё равно не влезут — поднимаем минимум колонок
+  const minSpanFor = w => (w >= 520 ? 3 : w >= 400 ? 4 : w >= 330 ? 6 : 12);
+  const blkW = (b, gw) => `grid-column:span ${Math.max(spanOf(b.wp), minSpanFor(gw || 300))};`;
 
   function move(i, d) {
     const b = blocks(), j = i + d;
@@ -501,7 +503,7 @@
           const dirX = (dir === 'w' || dir === 'sw') ? -1 : 1;
           const w = Math.max(60, startW + dirX * (e.clientX - startX));
           const unit = (gridW + 8) / GRID_COLS;
-          const raw = Math.max(1, Math.min(GRID_COLS, Math.round((w + 8) / unit)));
+          const raw = Math.max(minSpanFor(gridW), Math.min(GRID_COLS, Math.round((w + 8) / unit)));
           const span = SPANS.reduce((a, b) => (Math.abs(b - raw) < Math.abs(a - raw) ? b : a), GRID_COLS);
           blkEl.style.gridColumn = `span ${span}`;
           blkEl.dataset.span = String(span);
