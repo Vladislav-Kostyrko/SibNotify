@@ -1277,9 +1277,61 @@ fn apply_hotkey(app: &AppHandle, spec: &str) {
     }
 }
 
+fn config_dir_guess() -> PathBuf {
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        if cfg!(windows) {
+            return PathBuf::from(appdata).join("ru.sibtrans.notify");
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        if cfg!(target_os = "macos") {
+            return PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("ru.sibtrans.notify");
+        }
+        let base = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", home));
+        return PathBuf::from(base).join("ru.sibtrans.notify");
+    }
+    PathBuf::from(".")
+}
+
+/// хоткей нужен до старта плагина — читаем конфиг напрямую с диска
+fn config_hotkey_direct() -> String {
+    let p = config_dir_guess().join("config.json");
+    let txt = std::fs::read_to_string(p).unwrap_or_default();
+    let v: Value = serde_json::from_str(&txt).unwrap_or(json!({}));
+    v.get("hotkey")
+        .and_then(|x| x.as_str())
+        .unwrap_or("ctrl+alt+n")
+        .to_string()
+}
+
+fn on_shortcut(
+    app: &AppHandle,
+    _sc: &tauri_plugin_global_shortcut::Shortcut,
+    event: tauri_plugin_global_shortcut::ShortcutEvent,
+) {
+    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+        show_panel_inner(app);
+    }
+}
+
+fn build_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use tauri_plugin_global_shortcut::Builder;
+    let spec = config_hotkey_direct();
+    if let Some(sc) = shortcut_from(&spec) {
+        if let Ok(b) = Builder::new().with_handler(on_shortcut).with_shortcut(sc) {
+            return b.build();
+        }
+    }
+    Builder::new().with_handler(on_shortcut).build()
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(build_shortcut_plugin())
         .setup(|app| {
             let handle = app.handle().clone();
             let cfg = load_config(&handle);
@@ -1351,15 +1403,6 @@ fn main() {
                 }
                 let _ = builder.build(app);
             }
-
-            let hk = app
-                .state::<AppState>()
-                .cfg
-                .lock()
-                .unwrap()
-                .hotkey
-                .clone();
-            apply_hotkey(app.handle(), &hk);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
