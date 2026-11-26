@@ -68,8 +68,7 @@ pub struct Config {
     /// тост-уведомления Windows
     #[serde(default = "d_true")]
     pub(crate) toast: bool,
-    #[serde(flatten)]
-    pub(crate) extra: serde_json::Map<String, serde_json::Value>,
+
 }
 
 pub(crate) fn d_true() -> bool { true }
@@ -128,7 +127,6 @@ impl Default for Config {
             hotkey: d_hotkey(),
             strip_enabled: true,
             toast: true,
-            extra: serde_json::Map::new(),
         }
     }
 }
@@ -144,15 +142,36 @@ pub(crate) fn config_path(app: &AppHandle) -> PathBuf {
 
 pub(crate) fn load_config(app: &AppHandle) -> Config {
     let p = config_path(app);
-    std::fs::read_to_string(&p)
-        .ok()
-        .and_then(|s| serde_json::from_str::<Config>(&s).ok())
-        .unwrap_or_default()
+    let raw = std::fs::read_to_string(&p).unwrap_or_default();
+    match serde_json::from_str::<Config>(&raw) {
+        Ok(c) => c,
+        Err(e) => {
+            if !raw.trim().is_empty() {
+                let _ = std::fs::write(config_path(app).with_extension("bad.json"), &raw);
+                eprintln!("config parse error: {e}");
+            }
+            Config::default()
+        }
+    }
 }
 
 pub(crate) fn save_cfg(app: &AppHandle, cfg: &Config) -> Result<(), String> {
     let p = config_path(app);
-    let data = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
+    // берём то, что уже лежит на диске, и накладываем свои поля поверх:
+    // так не теряются ключи, которых Rust не знает (font_size, accent, theme и т.п.)
+    let mut base = std::fs::read_to_string(&p)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let mine = serde_json::to_value(cfg).map_err(|e| e.to_string())?;
+    if let Some(obj) = mine.as_object() {
+        for (k, v) in obj {
+            base.insert(k.clone(), v.clone());
+        }
+    }
+    let data = serde_json::to_string_pretty(&serde_json::Value::Object(base))
+        .map_err(|e| e.to_string())?;
     std::fs::write(p, data).map_err(|e| e.to_string())
 }
 
