@@ -25,3 +25,15 @@ pub(crate) async fn weather_now(st: tauri::State<'_, AppState>) -> Result<Value,
     };
     Ok(connectors::weather(lat, lon, &city, &proxy, &src).await)
 }
+
+#[tauri::command]
+pub(crate) async fn ai_usage(st: tauri::State<'_, AppState>) -> Result<Value, String> {
+    let (prov, key) = {
+        let c = st.cfg.lock().unwrap();
+        (c.ai_provider.clone(), c.ai_key.clone())
+    };
+    if key.trim().is_empty() {
+        return Ok(serde_json::json!({"ok": false, "error": "ключ не указан"}));
+    }
+    Ok(connectors::ai_balance(&prov, &key).await)
+}

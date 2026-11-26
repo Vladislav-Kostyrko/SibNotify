@@ -25,6 +25,9 @@ pub struct Config {
     pub(crate) mm_token: String,
     pub(crate) ics_urls: String,
     pub(crate) tg_token: String,
+    pub(crate) ai_provider: String,
+    pub(crate) ai_key: String,
+    pub(crate) ai_hist: serde_json::Value,
     pub(crate) weather_city: String,
     pub(crate) weather_lat: f64,
     pub(crate) weather_lon: f64,
@@ -65,6 +68,8 @@ pub struct Config {
     /// тост-уведомления Windows
     #[serde(default = "d_true")]
     pub(crate) toast: bool,
+    #[serde(flatten)]
+    pub(crate) extra: serde_json::Map<String, serde_json::Value>,
 }
 
 pub(crate) fn d_true() -> bool { true }
@@ -99,6 +104,9 @@ impl Default for Config {
             mm_token: String::new(),
             ics_urls: String::new(),
             tg_token: String::new(),
+            ai_provider: "deepseek".to_string(),
+            ai_key: String::new(),
+            ai_hist: json!([]),
             weather_city: "Новосибирск".to_string(),
             weather_lat: 55.03,
             weather_lon: 82.92,
@@ -120,6 +128,7 @@ impl Default for Config {
             hotkey: d_hotkey(),
             strip_enabled: true,
             toast: true,
+            extra: serde_json::Map::new(),
         }
     }
 }

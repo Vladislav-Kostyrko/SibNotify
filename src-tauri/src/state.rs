@@ -14,4 +14,5 @@ pub(crate) struct AppState {
     pub(crate) users: Mutex<std::collections::HashMap<i64, String>>,
     pub(crate) blocked: AtomicBool,
     pub(crate) dragging: AtomicBool,
+    pub(crate) last_toast: Mutex<serde_json::Value>,
 }

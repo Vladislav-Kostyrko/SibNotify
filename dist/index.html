@@ -97,6 +97,21 @@
   .row .k{color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .row .v{font-variant-numeric:tabular-nums;flex:none;}
   .bar{height:4px;border-radius:6px;background:rgba(255,255,255,.09);overflow:hidden;margin:3px 0 5px;}
+  /* система: крупные плитки и таблица */
+  .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:8px;margin-bottom:6px;}
+  .stile{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:7px 8px;}
+  .stile .sk{font-size:0.7em;color:var(--dim);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stile .sv{font-size:1.15em;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .stile .bar{margin:5px 0 0;}
+  .stable{display:flex;flex-direction:column;}
+  .srow{display:flex;justify-content:space-between;gap:8px;font-size:0.88em;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.05);}
+  .srow:last-child{border-bottom:0;}
+  .srow b{font-weight:600;font-variant-numeric:tabular-nums;}
+  /* ИИ */
+  .ai-big{display:flex;align-items:baseline;gap:8px;margin:2px 0 6px;}
+  .ai-big .n{font-size:1.55em;font-weight:700;font-variant-numeric:tabular-nums;}
+  .ai-big .u{font-size:0.78em;color:var(--dim);}
+  .ai-spark{width:100%;height:34px;display:block;margin-top:6px;}
   .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7ec3ff);}
   .bar.warn > i{background:linear-gradient(90deg,var(--warn),#ffd479);}
   .bar.bad > i{background:linear-gradient(90deg,var(--bad),#ff9a9a);}
@@ -136,9 +151,11 @@
     --txt:#e8ecf3;--dim:#8d96a8;--bg2:#1a1e29;--line:rgba(255,255,255,.10);color:#e8ecf3;}
   .sheet.on{display:flex;}
   .card{background:#10131b;border:1px solid rgba(255,255,255,.12);border-radius:16px;width:100%;max-height:100%;
-    overflow-y:auto;padding:16px;box-shadow:0 24px 60px rgba(0,0,0,.7);}
-  .card h2{margin:0 0 10px;font-size:0.92em;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);}
-  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    overflow-y:auto;padding:18px 18px 14px;box-shadow:0 24px 60px rgba(0,0,0,.7);}
+  .sheet .card{max-width:600px;}
+  .sheet.wide .card{max-width:min(760px,96vw);}
+  .card h2{margin:0 0 12px;font-size:1em;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
   #tiles{display:block;}
   .tcat{font-size:0.73em;text-transform:uppercase;letter-spacing:.08em;color:#6d7789;margin:12px 0 6px;}
   .tcat:first-child{margin-top:2px;}
@@ -182,7 +199,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.10.4</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.11.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -193,14 +210,6 @@
 
   <div class="grid" id="grid"></div>
 
-  <div class="foot">
-    <button id="act-task">+ Задача</button>
-    <button id="act-dnd">DND</button>
-    <button id="act-b24">Б24</button>
-    <button id="act-mm">ММ</button>
-    <button id="act-tg">ТГ</button>
-  </div>
-
   <div class="sheet" id="sh-add">
     <div class="card">
       <h2 id="add-title">Добавить блок</h2>
@@ -209,7 +218,7 @@
     </div>
   </div>
 
-  <div class="sheet" id="sh-cfg">
+  <div class="sheet wide" id="sh-cfg">
     <div class="card">
       <h2 id="cfg-title">Подключение</h2>
       <div id="cfg-fields"></div>
@@ -393,6 +402,7 @@
       onec:     { name: '1С',            ic: '▣', need: ['wa'],  def: { h: 0, w: 0 } },
       amo:      { name: 'amoCRM',        ic: '●', need: ['wa'],  def: { h: 0, w: 0 } },
       weather:  { name: 'Погода',       ic: '☀', need: [],      def: { h: 120, w: 0 } },
+      ai:       { name: 'ИИ расход',    ic: '✦', need: ['ai'],  def: { h: 150, w: 0 } },
     clock:    { name: 'Часы',         ic: '◷', need: [],      def: { h: 100, w: 0 } }
   };
 
@@ -631,6 +641,7 @@
           if (b.type === 'system') await sysBlock(b, body, i);
           else if (b.type === 'weather') await weatherBlock(b, body, i);
           else if (b.type === 'clock') clockBlock(b, body, i);
+          else if (b.type === 'ai') await aiBlock(b, body, i);
           else if (b.type === 'tasks') await tasksBlock(b, body, i);
           else if (b.type === 'comments') await commentsBlock(b, body, i);
           else if (b.type === 'chats') await chatsBlock(b, body, i);
@@ -658,11 +669,59 @@
     if (!s) return;
     const it = b.items || {};
     const flag = k => (it[k] !== false);
+    const view = b.view || 'compact';
+    const barCls = p => (p > 85 ? 'bad' : p > 60 ? 'warn' : '');
     let html = '';
+
+    if (view === 'big') {
+      const tiles = [];
+      if (flag('cpu')) tiles.push(['CPU', s.cpu + '%', s.cpu]);
+      if (flag('ram')) tiles.push(['Память', R(s.ram_used_gb) + '/' + R(s.ram_total_gb), s.ram_pct]);
+      if (flag('disk') && s.disk && s.disk.total_gb) {
+        const used = s.disk.total_gb - s.disk.free_gb;
+        tiles.push(['Диск ' + esc(s.disk.mount), s.disk.free_gb.toFixed(0) + ' ГБ', Math.round(used / s.disk.total_gb * 100)]);
+      }
+      if (flag('battery') && s.battery) tiles.push(['Батарея', s.battery + '%', s.battery]);
+      html += '<div class="sgrid">' + tiles.map(([k, v, p]) =>
+        `<div class="stile"><div class="sk">${k}</div><div class="sv">${v}</div>
+         <div class="bar ${barCls(p)}"><i style="width:${Math.min(100, p)}%"></i></div></div>`).join('') + '</div>';
+      if (flag('net')) html += `<div class="row"><span class="k">Сеть</span><span class="v">↓${rate(s.net_down)} ↑${rate(s.net_up)}</span></div>`;
+      if (flag('procs') && s.procs) html += `<div class="row"><span class="k">Процессов</span><span class="v">${s.procs}</span></div>`;
+      if (flag('uptime') && s.uptime_h !== undefined) {
+        const d = Math.floor(s.uptime_h / 24), h = s.uptime_h % 24;
+        html += `<div class="row"><span class="k">Аптайм</span><span class="v">${d} д ${h} ч</span></div>`;
+      }
+      if (flag('top') && s.top && s.top.length) {
+        html += `<div class="cdate">Больше всего памяти</div>` + s.top.map(p =>
+          `<div class="row"><span class="k">${esc(p.name)}</span><span class="v">${p.mb} МБ</span></div>`).join('');
+      }
+      body.innerHTML = html || '<div class="empty">Все пункты выключены</div>';
+      return;
+    }
+
+    if (view === 'table') {
+      const rows = [];
+      if (flag('cpu')) rows.push(['CPU', s.cpu + '%']);
+      if (flag('ram')) rows.push(['Память', R(s.ram_used_gb) + ' / ' + R(s.ram_total_gb) + ' ГБ']);
+      if (flag('disk') && s.disk && s.disk.total_gb) rows.push(['Диск ' + esc(s.disk.mount), s.disk.free_gb.toFixed(0) + ' ГБ своб.']);
+      if (flag('net')) rows.push(['Сеть', `↓${rate(s.net_down)} ↑${rate(s.net_up)}`]);
+      if (flag('procs') && s.procs) rows.push(['Процессов', String(s.procs)]);
+      if (flag('uptime') && s.uptime_h !== undefined) rows.push(['Аптайм', Math.floor(s.uptime_h / 24) + ' д ' + (s.uptime_h % 24) + ' ч']);
+      if (flag('battery') && s.battery) rows.push(['Батарея', s.battery + '%']);
+      html += '<div class="stable">' + rows.map(([k, v]) =>
+        `<div class="srow"><span>${k}</span><b>${v}</b></div>`).join('') + '</div>';
+      if (flag('top') && s.top && s.top.length) {
+        html += `<div class="cdate">Больше всего памяти</div>` + s.top.map(p =>
+          `<div class="srow"><span>${esc(p.name)}</span><b>${p.mb} МБ</b></div>`).join('');
+      }
+      body.innerHTML = html || '<div class="empty">Все пункты выключены</div>';
+      return;
+    }
+
     if (flag('cpu')) html += `<div class="row"><span class="k">CPU</span><span class="v">${s.cpu}%</span></div>
-      <div class="bar ${s.cpu > 85 ? 'bad' : s.cpu > 60 ? 'warn' : ''}"><i style="width:${Math.min(100, s.cpu)}%"></i></div>`;
+      <div class="bar ${barCls(s.cpu)}"><i style="width:${Math.min(100, s.cpu)}%"></i></div>`;
     if (flag('ram')) html += `<div class="row"><span class="k">Память</span><span class="v">${R(s.ram_used_gb)} / ${R(s.ram_total_gb)} ГБ</span></div>
-      <div class="bar ${s.ram_pct > 85 ? 'bad' : s.ram_pct > 65 ? 'warn' : ''}"><i style="width:${s.ram_pct}%"></i></div>`;
+      <div class="bar ${barCls(s.ram_pct)}"><i style="width:${s.ram_pct}%"></i></div>`;
     if (flag('disk') && s.disk && s.disk.total_gb) {
       const used = s.disk.total_gb - s.disk.free_gb, pct = Math.round(used / s.disk.total_gb * 100);
       html += `<div class="row"><span class="k">Диск ${esc(s.disk.mount)}</span><span class="v">${s.disk.free_gb.toFixed(0)} ГБ своб.</span></div>
@@ -680,6 +739,55 @@
     }
     if (flag('battery') && s.battery) html += `<div class="row"><span class="k">Батарея</span><span class="v">${s.battery}%</span></div>`;
     body.innerHTML = html || '<div class="empty">Все пункты выключены</div>';
+  }
+
+  function spark(vals, w, h) {
+    if (!vals || vals.length < 2) return '';
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const span = (max - min) || 1;
+    const pts = vals.map((v, i) =>
+      `${(i / (vals.length - 1)) * w},${(h - 3 - ((v - min) / span) * (h - 6)).toFixed(1)}`).join(' ');
+    return `<svg class="ai-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="color:var(--accent)">
+      <polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".9"/></svg>`;
+  }
+
+  async function aiBlock(b, body, i) {
+    const r = await invoke('ai_usage');
+    const view = b.view || 'big';
+    if (!r || !r.ok) {
+      body.innerHTML = `<div class="err">${esc(shortErr((r && r.error) || 'нет данных'))}</div>
+        <div class="hint">Ключ и провайдер — в ⚙ блока или в общих настройках.</div>`;
+      return;
+    }
+    const sym = r.currency === 'USD' ? '$' : r.currency === 'CNY' ? '¥' : (r.currency || '');
+    const today = new Date().toISOString().slice(0, 10);
+    let hist = Array.isArray(cfg.ai_hist) ? cfg.ai_hist.slice() : [];
+    const before = hist.length ? hist[hist.length - 1] : null;
+    const spentToday = (before && before.d === today) ? Math.max(0, before.v - r.balance) : 0;
+    hist = hist.filter(p => p.d !== today);
+    hist.push({ d: today, v: r.balance });
+    cfg.ai_hist = hist.slice(-30);
+    if (!cfg._aiSaved || Date.now() - cfg._aiSaved > 900000) { cfg._aiSaved = Date.now(); saveCfg(); }
+    const vals = cfg.ai_hist.map(p => p.v);
+
+    if (view === 'chart') {
+      body.innerHTML = `<div class="row"><span class="k">Остаток</span><span class="v">${sym}${r.balance.toFixed(2)}</span></div>
+        ${spark(vals, 200, 40)}
+        <div class="row"><span class="k">За сегодня</span><span class="v">${sym}${spentToday.toFixed(2)}</span></div>`;
+      return;
+    }
+    if (view === 'table') {
+      body.innerHTML = `<div class="stable">
+        <div class="srow"><span>Остаток</span><b>${sym}${r.balance.toFixed(2)}</b></div>
+        <div class="srow"><span>Траты сегодня</span><b>${sym}${spentToday.toFixed(2)}</b></div>
+        ${r.used !== undefined ? `<div class="srow"><span>Всего израсходовано</span><b>${sym}${(+r.used).toFixed(2)}</b></div>` : ''}
+        <div class="srow"><span>Провайдер</span><b>${esc(r.provider || '')}</b></div>
+      </div>`;
+      return;
+    }
+    body.innerHTML = `<div class="ai-big"><span class="n">${sym}${r.balance.toFixed(2)}</span><span class="u">осталось</span></div>
+      <div class="row"><span class="k">Потрачено сегодня</span><span class="v">${sym}${spentToday.toFixed(2)}</span></div>
+      ${spark(vals, 200, 40)}`;
   }
 
   async function weatherBlock(b, body, i) {
@@ -919,17 +1027,19 @@
 
   /* ---------- модалки ---------- */
   const CATS = [
-    { k: 'crm',   n: 'CRM',         ic: '◆', d: 'Битрикс24, Tilda, 1С, amoCRM' },
+    { k: 'crm',   n: 'CRM',         ic: '◆', d: 'Битрикс24: задачи, комментарии, чаты' },
     { k: 'msg',   n: 'Мессенджеры', ic: '✈', d: 'Mattermost, Telegram, WhatsApp, ВК' },
     { k: 'cal',   n: 'Календари',   ic: '▦', d: 'Яндекс, Outlook, iCloud, Google' },
     { k: 'mail',  n: 'Почта',       ic: '✉', d: 'Яндекс, Mail.ru, GMail, Outlook' },
+    { k: 'ai',    n: 'ИИ',          ic: '✦', d: 'расход токенов и остаток денег' },
     { k: 'other', n: 'Прочее',      ic: '▤', d: 'система, погода, часы' }
   ];
   const OF = {
-    crm:   [['tasks', 'Битрикс24'], ['comments', 'Битрикс24'], ['chats', 'Битрикс24'], ['tilda', 'Tilda'], ['onec', '1С'], ['amo', 'amoCRM']],
+    crm:   [['tasks', 'Битрикс24'], ['comments', 'Битрикс24'], ['chats', 'Битрикс24']],
     msg:   [['mm', 'Mattermost'], ['tg', 'Telegram'], ['wa', 'WhatsApp'], ['vk', 'ВКонтакте'], ['slack', 'Slack'], ['discord', 'Discord'], ['viber', 'Viber']],
     cal:   [['cal', 'Яндекс'], ['cal', 'Outlook'], ['cal', 'iCloud'], ['cal', 'Google']],
     mail:  [['mail', 'Yandex'], ['mail', 'Mail.ru'], ['mail', 'GMail'], ['mail', 'Outlook']],
+    ai:    [['ai', 'Расход ИИ']],
     other: [['system', ''], ['weather', ''], ['clock', '']]
   };
   let addCat = null;
@@ -1051,7 +1161,27 @@
     }
 
     const it = b.items || {};
+    if (type === 'ai') {
+      h += `<div class="field">Вид<select id="f-view">
+        <option value="big"${(b.view || 'big') === 'big' ? ' selected' : ''}>Крупная цифра</option>
+        <option value="chart"${b.view === 'chart' ? ' selected' : ''}>График</option>
+        <option value="table"${b.view === 'table' ? ' selected' : ''}>Таблица</option>
+      </select></div>
+      <div class="row2">
+        <div class="field">Провайдер<select id="f-ai-prov">
+          ${[['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter'], ['moonshot', 'Moonshot (Kimi)'], ['openai', 'OpenAI'], ['anthropic', 'Anthropic']]
+            .map(([k, n]) => `<option value="${k}"${(cfg.ai_provider || 'deepseek') === k ? ' selected' : ''}>${n}</option>`).join('')}
+        </select></div>
+        <div class="field">API-ключ<input id="f-ai-key" value="${esc(cfg.ai_key || '')}" placeholder="sk-..." /></div>
+      </div>
+      <div class="hint">Баланс берётся с API провайдера: DeepSeek и Moonshot отдают остаток в юанях, OpenRouter — в долларах. Токены за день провайдеры не отдают, поэтому показываю траты за день по падению остатка.</div>`;
+    }
     if (type === 'system') {
+      h += `<div class="field">Вид<select id="f-view">
+        <option value="compact"${(b.view || 'compact') === 'compact' ? ' selected' : ''}>Полоски (компактно)</option>
+        <option value="big"${b.view === 'big' ? ' selected' : ''}>Крупные плитки</option>
+        <option value="table"${b.view === 'table' ? ' selected' : ''}>Таблица</option>
+      </select></div>`;
       h += `<div class="cdate" style="margin:8px 0 4px">Что показывать</div>`;
       [['cpu', 'Процессор'], ['ram', 'Память'], ['disk', 'Диск'], ['net', 'Сеть'],
        ['procs', 'Процессы'], ['uptime', 'Аптайм'], ['top', 'Топ по памяти'], ['battery', 'Батарея']]
@@ -1150,6 +1280,9 @@
     item.w = 0;
     if ($('f-limit')) item.limit = parseInt($('f-limit').value || '10', 10);
     if ($('f-deadline')) item.deadline_filter = $('f-deadline').value;
+    if ($('f-view')) item.view = $('f-view').value;
+    if ($('f-ai-prov')) cfg.ai_provider = $('f-ai-prov').value;
+    if ($('f-ai-key')) cfg.ai_key = $('f-ai-key').value.trim();
     if (type === 'system' || type === 'weather') {
       const src = { cpu: 1, ram: 1, disk: 1, net: 1, procs: 1, uptime: 1, top: 1, battery: 1,
                     feels: 1, wind: 1, hum: 1, hourly: 1, days: 1, sun: 1 };
@@ -1248,7 +1381,10 @@
   };
   $('s-fs').oninput = () => { $('s-fs-val').textContent = $('s-fs').value + ' px'; };
   const tt = $('s-toast-test');
-  if (tt) tt.onclick = () => invoke('notify', { title: 'SibNotify', body: 'Проверка уведомлений — если видишь это, тосты работают' });
+  if (tt) tt.onclick = () => {
+    invoke('toast', { title: 'SibNotify', body: 'Проверка уведомлений — если видишь это, тосты работают', color: cfg.accent || '#4aa3ff', ms: 6000 });
+    invoke('notify', { title: 'SibNotify', body: 'Проверка уведомлений' });
+  };
   $('s-save').onclick = async () => {
     cfg.panel_width = Math.max(280, Math.min(1400, parseInt($('s-width').value || '400', 10)));
     cfg.opacity = Math.max(40, Math.min(100, parseInt($('s-opacity').value || '94', 10)));
@@ -1284,11 +1420,7 @@
   };
   $('btn-refresh').onclick = () => { busy = false; render(); };
 
-  $('act-b24').onclick = () => invoke('open_url', { url: 'https://b24.sibtrans.ru/' });
-  $('act-mm').onclick = () => invoke('open_url', { url: (cfg && cfg.mm_url) || 'https://mm.sibtrans.ru' });
-  $('act-tg').onclick = () => invoke('open_url', { url: 'https://web.telegram.org/a/' });
-  $('act-dnd').onclick = () => { dnd = !dnd; $('act-dnd').classList.toggle('on', dnd); clearTimeout(hideTimer); };
-  $('act-task').onclick = () => { $('nt-status').textContent = ''; openSheet('sh-task'); };
+  // быстрые кнопки внизу убраны — остались горячие клавиши и контекст блоков
   $('nt-save').onclick = async () => {
     const title = $('nt-title').value.trim();
     if (!title) { $('nt-status').textContent = 'Нужно название'; return; }

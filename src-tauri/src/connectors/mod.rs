@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 pub mod common;
+pub mod ai;
 pub mod b24;
 pub mod calendar;
 pub mod mail;
@@ -7,6 +8,7 @@ pub mod mattermost;
 pub mod telegram;
 pub mod weather;
 
+pub use ai::*;
 pub use b24::*;
 pub use calendar::*;
 pub use mail::*;

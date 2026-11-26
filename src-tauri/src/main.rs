@@ -46,6 +46,7 @@ fn main() {
                 users: Mutex::new(std::collections::HashMap::new()),
                 blocked: AtomicBool::new(false),
                 dragging: AtomicBool::new(false),
+                last_toast: Mutex::new(serde_json::Value::Null),
             });
 
             place(&handle);
@@ -116,6 +117,10 @@ fn main() {
             monitors,
             set_monitor,
             notify,
+            toast,
+            hide_toast,
+            toast_ready,
+            ai_usage,
             set_autostart,
             autostart_state,
             sys_stats,

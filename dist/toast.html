@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>SibNotify</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden;
+    font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;-webkit-user-select:none;user-select:none;}
+  #t{display:flex;gap:10px;align-items:flex-start;height:100%;box-sizing:border-box;padding:12px 14px;
+    background:rgba(18,22,31,.94);border:1px solid rgba(255,255,255,.12);border-radius:14px;
+    box-shadow:0 14px 34px rgba(0,0,0,.55);color:#e8ecf3;opacity:0;transform:translateY(10px);
+    transition:opacity .18s ease, transform .18s ease;}
+  #t.on{opacity:1;transform:none;}
+  .bar{width:3px;align-self:stretch;border-radius:3px;background:#4aa3ff;flex:none;}
+  .txt{flex:1;min-width:0;}
+  .ttl{font-size:13px;font-weight:600;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bdy{font-size:12px;color:#9aa4b6;line-height:1.35;margin-top:3px;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .x{color:#6d7789;font-size:14px;cursor:pointer;padding:0 2px;flex:none;}
+  .x:hover{color:#e8ecf3;}
+</style>
+</head>
+<body>
+  <div id="t">
+    <div class="bar"></div>
+    <div class="txt"><div class="ttl" id="ttl">SibNotify</div><div class="bdy" id="bdy"></div></div>
+    <div class="x" id="x">✕</div>
+  </div>
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen } = window.__TAURI__.event;
+  const t = document.getElementById('t');
+  const ttl = document.getElementById('ttl'), bdy = document.getElementById('bdy');
+  let hideTimer = null;
+
+  function show(p) {
+    if (!p) return;
+    ttl.textContent = p.title || 'SibNotify';
+    bdy.textContent = p.body || '';
+    document.querySelector('.bar').style.background = p.color || '#4aa3ff';
+    t.classList.add('on');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(close, p.ms || 6500);
+  }
+
+  async function close() {
+    t.classList.remove('on');
+    await new Promise(r => setTimeout(r, 200));
+    try { await invoke('hide_panel'); } catch (e) {}
+    try { await invoke('hide_toast'); } catch (e) {}
+  }
+
+  document.getElementById('x').onclick = e => { e.stopPropagation(); close(); };
+  t.onclick = async () => {
+    try { await invoke('show_panel'); } catch (e) {}
+    close();
+  };
+
+  listen('toast-data', e => show(e.payload));
+  // если данные пришли до готовности JS — просим повторить
+  try { invoke('toast_ready'); } catch (e) {}
+</script>
+</body>
+</html>
