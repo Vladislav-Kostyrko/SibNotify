@@ -5,8 +5,19 @@ use crate::windows::place;
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
-pub(crate) fn get_config(st: tauri::State<AppState>) -> Config {
-    st.cfg.lock().unwrap().clone()
+pub(crate) fn get_config(app: AppHandle, st: tauri::State<AppState>) -> Config {
+    let cfg = st.cfg.lock().unwrap().clone();
+    // диагностика: если панель пустая — смотрим, что ушло во фронт
+    if let Ok(dir) = app.path().app_config_dir() {
+        let diag = serde_json::json!({
+            "path": dir.join("config.json").to_string_lossy(),
+            "blocks": cfg.blocks.len(),
+            "panel_width": cfg.panel_width,
+            "font_size_seen": false,
+        });
+        let _ = std::fs::write(dir.join("config.debug.json"), serde_json::to_string_pretty(&diag).unwrap_or_default());
+    }
+    cfg
 }
 
 #[tauri::command]

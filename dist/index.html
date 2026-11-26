@@ -205,7 +205,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.12.1</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.11.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -1548,11 +1548,34 @@
   }, 2500);
 
   (async function init() {
-    cfg = (await invoke('get_config')) || {};
+    const diag = t => { try { invoke('js_log', { text: '[' + new Date().toISOString().slice(11, 19) + '] ' + t }); } catch (e) {} };
+    diag('init start, href=' + location.href);
+    try {
+      // окна создаются раньше setup — состояние может появиться чуть позже, поэтому ретраим
+      let tries = 0;
+      for (;;) {
+        try { cfg = (await invoke('get_config')) || {}; break; }
+        catch (e) {
+          const msg = String((e && (e.message || e)) || e);
+          if (tries++ > 25) { diag('get_config FAIL: ' + msg); throw e; }
+          if (tries === 1) diag('get_config retry, reason=' + msg);
+          await new Promise(r => setTimeout(r, 120));
+        }
+      }
+      diag('get_config ok, blocks=' + ((cfg.blocks || []).length));
+    } catch (e) {
+      throw e;
+    }
     if (!cfg.blocks) cfg.blocks = [];
     applyStyle();
     tickClock(); setInterval(tickClock, 1000);
-    render();
+    try {
+      render();
+      diag('render ok, blocks=' + blocks().length);
+    } catch (e) {
+      diag('render FAIL: ' + (e && (e.stack || e.message || e)));
+      throw e;
+    }
     loadWx();
     setInterval(() => { if (!document.querySelector('.sheet.on')) loadAll(); }, 60000);
     setInterval(() => { if (!document.querySelector('.sheet.on') && blocks().some(b => b.type === 'system' || b.type === 'clock')) loadAll(); }, 20000);

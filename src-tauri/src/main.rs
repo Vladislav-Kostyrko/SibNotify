@@ -15,7 +15,7 @@ use commands::misc::*;
 use commands::mm::*;
 use commands::system::*;
 use commands::ui::*;
-use config::load_config;
+use config::{load_config, Config};
 use hotkey::build_shortcut_plugin;
 use state::AppState;
 use std::sync::atomic::AtomicBool;
@@ -35,9 +35,10 @@ fn main() {
         .plugin(build_shortcut_plugin())
         .setup(|app| {
             let handle = app.handle().clone();
-            let cfg = load_config(&handle);
+            // сначала регистрируем состояние: окна создаются до setup, и их JS
+            // может дёрнуть команды раньше, чем мы дочитаем конфиг
             app.manage(AppState {
-                cfg: Mutex::new(cfg),
+                cfg: Mutex::new(Config::default()),
                 sys: Mutex::new(System::new()),
                 disks: Mutex::new(Disks::new_with_refreshed_list()),
                 nets: Mutex::new(Networks::new_with_refreshed_list()),
@@ -48,6 +49,35 @@ fn main() {
                 dragging: AtomicBool::new(false),
                 last_toast: Mutex::new(serde_json::Value::Null),
             });
+
+            let cfg = load_config(&handle);
+            *handle.state::<AppState>().cfg.lock().unwrap() = cfg.clone();
+
+            // диагностика старта: пишем в %APPDATA%\sibnotify-diag.txt независимо от tauri-путей
+            {
+                let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
+                let p = std::path::Path::new(&appdata).join("sibnotify-diag.txt");
+                let cfgp = handle
+                    .path()
+                    .app_config_dir()
+                    .map(|d| d.join("config.json").to_string_lossy().to_string())
+                    .unwrap_or_else(|e| format!("app_config_dir ERR: {e}"));
+                let raw = std::fs::read_to_string(&cfgp).unwrap_or_default();
+                let parsed = serde_json::from_str::<serde_json::Value>(&raw)
+                    .map(|v| v.get("blocks").map(|b| b.as_array().map(|a| a.len()).unwrap_or(0)).unwrap_or(0))
+                    .map_err(|e| e.to_string());
+                let body = format!(
+                    "exe={}\nconfig_path={}\nraw_len={}\nparse={:?}\nblocks_loaded={}\ncwd={:?}\n",
+                    std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+                    cfgp,
+                    raw.len(),
+                    parsed,
+                    cfg.blocks.len(),
+                    std::env::current_dir().ok(),
+                );
+                let _ = std::fs::write(&p, body);
+            }
+
 
             place(&handle);
 
@@ -141,7 +171,8 @@ fn main() {
             probe,
             mail,
             open_url,
-            quit_app
+            quit_app,
+            js_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

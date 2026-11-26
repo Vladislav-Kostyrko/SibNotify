@@ -120,3 +120,14 @@ pub(crate) async fn autostart_state() -> Result<Value, String> {
     #[allow(unreachable_code)]
     Ok(json!({"on": false}))
 }
+
+/// Лог из веб-части: пишем в %APPDATA%\sibnotify-js.log (для диагностики без devtools).
+#[tauri::command]
+pub(crate) fn js_log(text: String) {
+    let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
+    let p = std::path::Path::new(&appdata).join("sibnotify-js.log");
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+        let _ = writeln!(f, "{text}");
+    }
+}
