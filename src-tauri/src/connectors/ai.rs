@@ -2,6 +2,33 @@ use super::common::*;
 use serde_json::{json, Value};
 
 /// Остаток денег на счёте ИИ-провайдера. Универсальный ответ {ok, balance, currency, note}.
+
+/// Достаём тело ответа и текст ошибки, чтобы 401/402 не превращались в «баланс 0».
+async fn read_json(resp: reqwest::Response) -> Result<Value, String> {
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+    if !status.is_success() {
+        let msg = v
+            .pointer("/error/message")
+            .or_else(|| v.get("message"))
+            .or_else(|| v.get("error_description"))
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let hint = match status.as_u16() {
+            401 => "ключ не принят (401) — проверь, что скопировал целиком и он активен",
+            402 => "кончились деньги или нужен платёж (402)",
+            403 => "доступ запрещён (403)",
+            429 => "слишком много запросов (429)",
+            _ => "ошибка провайдера",
+        };
+        let tail = if msg.is_empty() { String::new() } else { format!(": {}", msg) };
+        return Err(format!("{}{}", hint, tail));
+    }
+    Ok(v)
+}
+
 pub async fn ai_balance(provider: &str, key: &str) -> Value {
     let cl = match client() {
         Ok(c) => c,
@@ -18,7 +45,7 @@ pub async fn ai_balance(provider: &str, key: &str) -> Value {
                 .send()
                 .await;
             match r {
-                Ok(resp) => match resp.json::<Value>().await {
+                Ok(resp) => match read_json(resp).await {
                     Ok(v) => {
                         let info = v
                             .get("balance_infos")
@@ -37,9 +64,9 @@ pub async fn ai_balance(provider: &str, key: &str) -> Value {
                             .unwrap_or("CNY");
                         json!({"ok": true, "provider": p, "balance": bal, "currency": cur, "note": ""})
                     }
-                    Err(e) => json!({"ok": false, "provider": p, "error": e.to_string()}),
+                    Err(e) => json!({"ok": false, "provider": p, "error": e}),
                 },
-                Err(e) => json!({"ok": false, "provider": p, "error": e.to_string()}),
+                Err(e) => json!({"ok": false, "provider": p, "error": format!("сеть: {e}")}),
             }
         }
         "openrouter" => {
@@ -49,7 +76,7 @@ pub async fn ai_balance(provider: &str, key: &str) -> Value {
                 .send()
                 .await;
             match r {
-                Ok(resp) => match resp.json::<Value>().await {
+                Ok(resp) => match read_json(resp).await {
                     Ok(v) => {
                         let d = v.get("data").cloned().unwrap_or(Value::Null);
                         let total = d.get("total_credits").and_then(|x| x.as_f64()).unwrap_or(0.0);
@@ -69,7 +96,7 @@ pub async fn ai_balance(provider: &str, key: &str) -> Value {
                 .send()
                 .await;
             match r {
-                Ok(resp) => match resp.json::<Value>().await {
+                Ok(resp) => match read_json(resp).await {
                     Ok(v) => {
                         let d = v.get("data").cloned().unwrap_or(Value::Null);
                         let bal = d
