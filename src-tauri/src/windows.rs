@@ -125,6 +125,8 @@ pub(crate) fn mon_rect(app: &AppHandle) -> Option<(i32, i32, i32, i32)> {
     Some((p.x, p.y, s.width as i32, s.height as i32))
 }
 
+
+
 #[cfg(windows)]
 pub(crate) fn drag_window(app: AppHandle, kind: &'static str) {
     use windows::Win32::Foundation::POINT;
@@ -138,56 +140,92 @@ pub(crate) fn drag_window(app: AppHandle, kind: &'static str) {
             return;
         }
     };
-    let (mx, my, _mw, mh) = match mon_rect(&app) {
-        Some(v) => v,
-        None => {
-            st_reset_drag(&app);
-            return;
-        }
-    };
-    let wpos = win.outer_position().unwrap_or(PhysicalPosition::new(mx, my));
     let wsize = win.outer_size().unwrap_or(PhysicalSize::new(1, 1));
-    let wh = wsize.height as i32;
-    let wx = wpos.x;
+    let (ww, wh) = (wsize.width as i32, wsize.height as i32);
+    let mons = app.available_monitors().unwrap_or_default();
+    if mons.is_empty() {
+        st_reset_drag(&app);
+        return;
+    }
+    let right = app.state::<AppState>().cfg.lock().unwrap().panel_side == "right";
+    let mut cur_idx = app
+        .state::<AppState>()
+        .cfg
+        .lock()
+        .unwrap()
+        .monitor_index
+        .min(mons.len() - 1);
 
     let mut cur = POINT::default();
     unsafe {
         let _ = GetCursorPos(&mut cur);
     }
-    let grab_dy = cur.y - wpos.y;
+    let start_pos = win
+        .outer_position()
+        .unwrap_or(PhysicalPosition::new(0, 0));
+    let grab_dy = cur.y - start_pos.y;
 
     loop {
         std::thread::sleep(Duration::from_millis(15));
         unsafe {
             let _ = GetCursorPos(&mut cur);
         }
-        let target = (cur.y - grab_dy).clamp(my, (my + mh - wh).max(my));
-        let _ = win.set_position(Position::Physical(PhysicalPosition::new(wx, target)));
+        // монитор под курсором — туда и переезжаем
+        let mut target = cur_idx;
+        for (i, m) in mons.iter().enumerate() {
+            let mp = m.position();
+            let ms = m.size();
+            if cur.x >= mp.x
+                && cur.x < mp.x + ms.width as i32
+                && cur.y >= mp.y
+                && cur.y < mp.y + ms.height as i32
+            {
+                target = i;
+                break;
+            }
+        }
+        let m = &mons[target];
+        let mp = m.position();
+        let ms = m.size();
+        let x = if right {
+            mp.x + ms.width as i32 - ww
+        } else {
+            mp.x
+        };
+        let y = (cur.y - grab_dy).clamp(mp.y, (mp.y + ms.height as i32 - wh).max(mp.y));
+        let _ = win.set_position(Position::Physical(PhysicalPosition::new(x, y)));
+        cur_idx = target;
         let pressed = (unsafe { GetAsyncKeyState(0x01) } as u16 & 0x8000) != 0;
         if !pressed {
             break;
         }
     }
 
-    let final_y = win.outer_position().map(|p| p.y).unwrap_or(my);
-    let (new_panel_pct, new_strip_pct, new_y) = {
+    let m = &mons[cur_idx];
+    let mp = m.position();
+    let ms = m.size();
+    let final_y = win.outer_position().map(|p| p.y).unwrap_or(mp.y);
+    let (panel_pct, strip_pct) = {
         let st = app.state::<AppState>();
         let mut cfg = st.cfg.lock().unwrap();
+        cfg.monitor_index = cur_idx;
         if kind == "strip" {
-            let free = (mh - wh).max(1);
-            cfg.strip_top_pct = (((final_y - my) * 100) / free).clamp(0, 100) as u32;
+            let free = (ms.height as i32 - wh).max(1);
+            cfg.strip_top_pct = (((final_y - mp.y) * 100) / free).clamp(0, 100) as u32;
         } else {
-            let pct = (((final_y - my) as f64 / mh as f64) * 100.0).round() as i64;
+            let pct = (((final_y - mp.y) as f64 / ms.height as f64) * 100.0).round() as i64;
             cfg.panel_top_pct = pct.clamp(0, 90) as u32;
         }
         let _ = save_cfg(&app, &cfg);
-        (cfg.panel_top_pct, cfg.strip_top_pct, final_y)
+        (cfg.panel_top_pct, cfg.strip_top_pct)
     };
-    let _ = new_y;
-    // сообщаем фронту новые проценты, иначе он при следующем сохранении цвета вернёт старые
     let _ = app.emit(
         "geom",
-        json!({"panel_top_pct": new_panel_pct, "strip_top_pct": new_strip_pct}),
+        json!({
+            "panel_top_pct": panel_pct,
+            "strip_top_pct": strip_pct,
+            "monitor_index": cur_idx,
+        }),
     );
     place(&app);
     st_reset_drag(&app);
@@ -195,7 +233,7 @@ pub(crate) fn drag_window(app: AppHandle, kind: &'static str) {
 
 #[cfg(not(windows))]
 pub(crate) fn drag_window(app: AppHandle, kind: &'static str) {
-    // на Linux/macOS тащим средствами ОС, а потом запоминаем процент позиции
+    // на Linux/macOS тащим средствами ОС, а потом запоминаем монитор и процент позиции
     let win = match app.get_webview_window(kind) {
         Some(w) => w,
         None => {
@@ -223,18 +261,47 @@ pub(crate) fn drag_window(app: AppHandle, kind: &'static str) {
         }
         last = cur;
     }
-    if let (Some(pos), Some((_mx, my, _mw, mh))) = (last, mon_rect(&app)) {
-        let wh = win.outer_size().map(|s| s.height as i32).unwrap_or(0);
-        let st = app.state::<AppState>();
-        let mut cfg = st.cfg.lock().unwrap();
-        if kind == "strip" {
-            let free = (mh - wh).max(1);
-            cfg.strip_top_pct = (((pos.y - my) * 100) / free).clamp(0, 100) as u32;
-        } else {
-            let pct = (((pos.y - my) as f64 / mh as f64) * 100.0).round() as i64;
-            cfg.panel_top_pct = pct.clamp(0, 90) as u32;
+    if let Some(pos) = last {
+        let wsize = win.outer_size().unwrap_or(PhysicalSize::new(1, 1));
+        let (wh, ww) = (wsize.height as i32, wsize.width as i32);
+        let mons = app.available_monitors().unwrap_or_default();
+        let cx = pos.x + ww / 2;
+        let cy = pos.y + wh / 2;
+        let mut idx = 0;
+        for (i, m) in mons.iter().enumerate() {
+            let mp = m.position();
+            let ms = m.size();
+            if cx >= mp.x && cx < mp.x + ms.width as i32 && cy >= mp.y && cy < mp.y + ms.height as i32 {
+                idx = i;
+                break;
+            }
         }
-        let _ = save_cfg(&app, &cfg);
+        if let Some(m) = mons.get(idx) {
+            let mp = m.position();
+            let ms = m.size();
+            let (panel_pct, strip_pct) = {
+                let st = app.state::<AppState>();
+                let mut cfg = st.cfg.lock().unwrap();
+                cfg.monitor_index = idx;
+                if kind == "strip" {
+                    let free = (ms.height as i32 - wh).max(1);
+                    cfg.strip_top_pct = (((pos.y - mp.y) * 100) / free).clamp(0, 100) as u32;
+                } else {
+                    let pct = (((pos.y - mp.y) as f64 / ms.height as f64) * 100.0).round() as i64;
+                    cfg.panel_top_pct = pct.clamp(0, 90) as u32;
+                }
+                let _ = save_cfg(&app, &cfg);
+                (cfg.panel_top_pct, cfg.strip_top_pct)
+            };
+            let _ = app.emit(
+                "geom",
+                json!({
+                    "panel_top_pct": panel_pct,
+                    "strip_top_pct": strip_pct,
+                    "monitor_index": idx,
+                }),
+            );
+        }
     }
     place(&app);
     st_reset_drag(&app);

@@ -177,7 +177,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.10.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.10.1</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -1276,6 +1276,7 @@
           const p = e.payload || {};
           if (p.panel_top_pct !== undefined) cfg.panel_top_pct = p.panel_top_pct;
           if (p.strip_top_pct !== undefined) cfg.strip_top_pct = p.strip_top_pct;
+          if (p.monitor_index !== undefined) cfg.monitor_index = p.monitor_index;
         });
       }
     } catch (e) {}
