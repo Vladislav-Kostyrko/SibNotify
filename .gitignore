@@ -1,0 +1,11 @@
+# rust / tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+target/
+
+# служебный мусор
+*.bak
+*.zip
+.DS_Store
+Thumbs.db
+node_modules/

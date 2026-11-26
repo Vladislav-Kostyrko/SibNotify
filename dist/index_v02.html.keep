@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>SibNotify</title>
+<style>
+  :root{
+    --bg: rgba(14,16,22,.92);
+    --bg2: rgba(24,27,36,.86);
+    --line: rgba(255,255,255,.08);
+    --txt: #e8ecf3;
+    --dim: #8d96a8;
+    --accent: #4aa3ff;
+    --warn: #ffb020;
+    --bad: #ff5c5c;
+    --ok: #48d18a;
+  }
+  *{box-sizing:border-box; -webkit-user-select:none; user-select:none;}
+  html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden;
+    font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;color:var(--txt);}
+  body.strip{cursor:ew-resize;display:flex;align-items:center;justify-content:center;}
+  .rail{width:100%;height:100%;background:linear-gradient(180deg,rgba(74,163,255,0),rgba(74,163,255,.55),rgba(74,163,255,0));opacity:.35;transition:opacity .18s ease;}
+  body.strip:hover .rail{opacity:1;}
+  .grip{position:absolute;top:50%;left:0;width:100%;height:64px;transform:translateY(-50%);background:var(--accent);border-radius:0 4px 4px 0;opacity:.85;}
+
+  body.panel{background:transparent;}
+  .panel{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);
+    backdrop-filter:blur(22px) saturate(140%);border-right:1px solid rgba(255,255,255,.10);
+    border-radius:0 18px 18px 0;box-shadow:0 0 40px rgba(0,0,0,.55);overflow:hidden;}
+  .panel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+    background:linear-gradient(180deg,transparent,var(--accent),transparent);opacity:.7;}
+  header{display:flex;align-items:center;gap:8px;padding:14px 16px 10px 16px;}
+  .brand{font-weight:600;letter-spacing:.14em;font-size:10.5px;color:var(--dim);}
+  .wx{font-size:11.5px;color:var(--dim);margin-left:8px;letter-spacing:0;}
+  .clock{margin-left:auto;font-variant-numeric:tabular-nums;font-size:21px;font-weight:600;}
+  .date{font-size:10.5px;color:var(--dim);text-align:right;line-height:1.2;}
+  .iconbtn{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:var(--bg2);
+    display:grid;place-items:center;cursor:pointer;color:var(--dim);font-size:13px;flex:none;}
+  .iconbtn:hover{color:var(--txt);border-color:rgba(255,255,255,.2);}
+
+  .scroll{flex:1;overflow-y:auto;padding:0 12px 8px 12px;}
+  .scroll::-webkit-scrollbar{width:8px;}
+  .scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:6px;}
+  .block{background:var(--bg2);border:1px solid var(--line);border-radius:14px;margin:9px 0;overflow:hidden;}
+  .block h3{margin:0;padding:9px 12px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line);}
+  .block h3 .cnt{margin-left:auto;font-size:10px;color:var(--dim);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:20px;}
+  .block h3 .cnt.hot{background:rgba(255,92,92,.18);color:#ffb3b3;}
+  .block .body{padding:10px 12px;}
+  .row{display:flex;align-items:center;gap:9px;font-size:12px;padding:2px 0;}
+  .row .k{color:var(--dim);width:72px;flex:none;}
+  .row .v{margin-left:auto;font-variant-numeric:tabular-nums;}
+  .bar{height:5px;border-radius:6px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:4px;}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7ec3ff);border-radius:6px;}
+  .bar.warn > i{background:linear-gradient(90deg,var(--warn),#ffd479);}
+  .bar.bad > i{background:linear-gradient(90deg,var(--bad),#ff9a9a);}
+  .item{padding:8px 0;border-bottom:1px dashed rgba(255,255,255,.07);cursor:pointer;}
+  .item:last-child{border-bottom:none;}
+  .item .t{font-size:12.5px;line-height:1.35;}
+  .item .m{font-size:10.5px;color:var(--dim);margin-top:3px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .item:hover .t{color:#fff;}
+  .badge{font-size:9.5px;padding:1px 6px;border-radius:20px;background:rgba(74,163,255,.16);color:#9ccbff;}
+  .badge.due{background:rgba(255,176,32,.16);color:#ffcf72;}
+  .badge.over{background:rgba(255,92,92,.16);color:#ff9d9d;}
+  .empty{font-size:11.5px;color:var(--dim);padding:4px 0;}
+  .err{font-size:11px;color:#ff9d9d;line-height:1.4;}
+  .cal-time{font-variant-numeric:tabular-nums;color:var(--dim);font-size:11px;display:inline-block;min-width:40px;}
+
+  .actions{display:flex;gap:7px;padding:8px 12px 12px 12px;border-top:1px solid var(--line);}
+  .actions button{flex:1;background:#1a1e29;border:1px solid var(--line);color:var(--txt);border-radius:9px;
+    padding:7px;font-size:11.5px;cursor:pointer;font-family:inherit;}
+  .actions button:hover{border-color:rgba(255,255,255,.24);}
+  .actions button.on{background:rgba(255,92,92,.18);border-color:rgba(255,92,92,.4);color:#ffb3b3;}
+
+  .settings{position:absolute;inset:0;background:#0b0d12;padding:14px 14px 22px;display:none;
+    flex-direction:column;gap:9px;overflow-y:auto;z-index:5;}
+  .settings.on{display:flex;}
+  .settings h2{font-size:12px;margin:0 0 2px 0;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);}
+  .field{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dim);}
+  .field input,.field select,.field textarea{background:#12151d;border:1px solid var(--line);border-radius:9px;color:var(--txt);
+    padding:7px 9px;font-size:12px;outline:none;font-family:inherit;resize:vertical;width:100%;}
+  .field textarea{min-height:44px;}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt);}
+  .chk input{width:14px;height:14px;accent-color:var(--accent);}
+  .actions2{display:flex;gap:9px;margin-top:4px;}
+  .btn{flex:1;border:1px solid var(--line);background:#1a1e29;color:var(--txt);border-radius:10px;padding:8px;font-size:12px;cursor:pointer;font-family:inherit;}
+  .btn.primary{background:linear-gradient(180deg,#2f8cf5,#2470d0);border-color:#2f8cf5;}
+  .hint{font-size:10px;color:#6d7789;line-height:1.35;}
+</style>
+</head>
+<body>
+<script>
+  const qs = new URLSearchParams(location.search);
+  document.body.className = qs.get('mode') === 'strip' ? 'strip' : 'panel';
+</script>
+
+<div id="strip" class="rail" style="display:none"><div class="grip"></div></div>
+
+<div id="panel" class="panel" style="display:none">
+  <header>
+    <div>
+      <div class="brand">SIBTRANS <span class="wx" id="wx"></span></div>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="clock" id="clock">--:--</div>
+    <div class="iconbtn" id="refresh" title="Обновить">⟳</div>
+    <div class="iconbtn" id="gear" title="Настройки">⚙</div>
+  </header>
+
+  <div class="scroll">
+    <div class="block" id="b-cal">
+      <h3>Календарь <span class="cnt" id="cal-cnt">0</span></h3>
+      <div class="body" id="cal"></div>
+    </div>
+    <div class="block" id="b-tasks">
+      <h3>Мои задачи <span class="cnt" id="tasks-cnt">0</span></h3>
+      <div class="body" id="tasks"></div>
+    </div>
+    <div class="block" id="b-comm">
+      <h3>Новые комментарии <span class="cnt" id="comm-cnt">0</span></h3>
+      <div class="body" id="comm"></div>
+    </div>
+    <div class="block" id="b-chats">
+      <h3>Чаты Б24 <span class="cnt" id="chats-cnt">0</span></h3>
+      <div class="body" id="chats"></div>
+    </div>
+    <div class="block" id="b-mm">
+      <h3>Mattermost <span class="cnt" id="mm-cnt">0</span></h3>
+      <div class="body" id="mm"></div>
+    </div>
+    <div class="block" id="b-tg">
+      <h3>Telegram <span class="cnt" id="tg-cnt">0</span></h3>
+      <div class="body" id="tg"></div>
+    </div>
+    <div class="block" id="b-sys">
+      <h3>Система</h3>
+      <div class="body" id="sys"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="act-task">+ Задача</button>
+    <button id="act-dnd">DND</button>
+    <button id="act-b24">Б24</button>
+    <button id="act-mm">ММ</button>
+  </div>
+
+  <div class="settings" id="newtask">
+    <h2>Новая задача</h2>
+    <div class="field">Название<input id="nt-title" /></div>
+    <div class="field">Описание<textarea id="nt-desc"></textarea></div>
+    <div class="field">Дедлайн (пусто = без срока)<input id="nt-deadline" type="date" /></div>
+    <div class="actions2">
+      <button class="btn" id="nt-cancel">Отмена</button>
+      <button class="btn primary" id="nt-save">Создать</button>
+    </div>
+    <div class="hint" id="nt-status"></div>
+  </div>
+
+  <div class="settings" id="settings">
+    <h2>Подключения</h2>
+    <div class="field">Вебхук Б24
+      <input id="s-webhook" placeholder="https://b24.sibtrans.ru/rest/ID/TOKEN/" />
+    </div>
+    <div class="grid2">
+      <div class="field">Мой ID в Б24<input id="s-user" type="number" /></div>
+      <div class="field">Обновление, сек<input id="s-refresh" type="number" min="15" /></div>
+    </div>
+    <div class="field">Mattermost URL<input id="s-mm-url" placeholder="https://mm.sibtrans.ru" /></div>
+    <div class="field">Токен Mattermost<input id="s-mm-token" placeholder="личный access token" /></div>
+    <div class="field">Календари .ics (по одному в строке)<textarea id="s-ics" placeholder="https://calendar.yandex.ru/export/ics.xml?private_token=..."></textarea></div>
+    <div class="field">Telegram: токен бота<input id="s-tg" placeholder="123456:AA..." /></div>
+    <div class="grid2">
+      <div class="field">Город для погоды<input id="s-city" /></div>
+      <div class="field">Широта / долгота
+        <div style="display:flex;gap:6px">
+          <input id="s-lat" type="number" step="0.01" /><input id="s-lon" type="number" step="0.01" />
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:8px">Вид</h2>
+    <div class="grid2">
+      <div class="field">Ширина, px<input id="s-width" type="number" min="280" max="900" /></div>
+      <div class="field">Прозрачность, %<input id="s-opacity" type="number" min="40" max="100" /></div>
+    </div>
+    <div class="field">Дедлайны
+      <select id="s-deadline">
+        <option value="all">все</option>
+        <option value="week">на неделю</option>
+        <option value="today">на сегодня</option>
+      </select>
+    </div>
+    <div class="grid2">
+      <div class="field">Задач в списке<input id="s-tasks" type="number" min="3" max="40" /></div>
+      <div class="field">Комментов на задачу<input id="s-cpt" type="number" min="1" max="10" /></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="s-sys" /> Система</label>
+    <label class="chk"><input type="checkbox" id="s-tasks-on" /> Мои задачи</label>
+    <label class="chk"><input type="checkbox" id="s-comm-on" /> Комментарии</label>
+    <label class="chk"><input type="checkbox" id="s-chats-on" /> Чаты Б24</label>
+    <label class="chk"><input type="checkbox" id="s-mm-on" /> Mattermost</label>
+    <label class="chk"><input type="checkbox" id="s-cal-on" /> Календарь</label>
+    <label class="chk"><input type="checkbox" id="s-wx-on" /> Погода</label>
+    <label class="chk"><input type="checkbox" id="s-sound" /> Звук при новых событиях</label>
+
+    <div class="actions2">
+      <button class="btn" id="s-cancel">Отмена</button>
+      <button class="btn primary" id="s-save">Сохранить</button>
+    </div>
+    <div class="actions2"><button class="btn" id="s-quit">Выход</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const isStrip = document.body.classList.contains('strip');
+  const T = window.__TAURI__;
+  const invoke = T ? T.core.invoke : async () => null;
+  const $ = id => document.getElementById(id);
+
+  if (isStrip) {
+    $('strip').style.display = 'block';
+    document.addEventListener('mouseenter', () => invoke('show_panel'));
+    document.addEventListener('mousedown', () => invoke('drag_start'));
+    window.addEventListener('contextmenu', e => e.preventDefault());
+    return;
+  }
+
+  $('panel').style.display = 'flex';
+  let cfg = null, hideTimer = null, dnd = false;
+  let lastB24 = 0, lastExtra = 0, seenComments = 0, audioCtx = null;
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmtGB = v => (Math.round(v * 10) / 10).toFixed(1);
+  function fmtRate(b) {
+    if (b > 1048576) return (b / 1048576).toFixed(1) + ' МБ/с';
+    if (b > 1024) return (b / 1024).toFixed(0) + ' КБ/с';
+    return b + ' Б/с';
+  }
+  function fmtD(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return iso;
+    return d.toDateString() === new Date().toDateString() ? 'сегодня'
+      : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  }
+  function dCls(iso) {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    const days = (d - new Date()) / 86400000;
+    return days < 0 ? 'over' : days < 2 ? 'due' : '';
+  }
+  function beep() {
+    if (!cfg || !cfg.sound || dnd) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.05;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {}
+  }
+
+  function tickClock() {
+    const n = new Date();
+    $('clock').textContent = n.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    $('date').textContent = n.toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit', month: 'long' });
+  }
+
+  async function loadSys() {
+    if (!cfg || !cfg.show_system) return;
+    const s = await invoke('sys_stats');
+    if (!s) return;
+    const ramCls = s.ram_pct > 85 ? 'bad' : s.ram_pct > 65 ? 'warn' : '';
+    const cpuCls = s.cpu > 85 ? 'bad' : s.cpu > 60 ? 'warn' : '';
+    let disk = '';
+    if (s.disk && s.disk.total_gb) {
+      const used = s.disk.total_gb - s.disk.free_gb, pct = Math.round(used / s.disk.total_gb * 100);
+      disk = `<div class="row" style="margin-top:7px"><span class="k">Диск ${esc(s.disk.mount)}</span><span class="v">${used.toFixed(0)} / ${s.disk.total_gb.toFixed(0)} ГБ</span></div>
+              <div class="bar ${pct > 90 ? 'bad' : pct > 75 ? 'warn' : ''}"><i style="width:${pct}%"></i></div>`;
+    }
+    $('sys').innerHTML = `
+      <div class="row"><span class="k">CPU</span><span class="v">${s.cpu}%</span></div>
+      <div class="bar ${cpuCls}"><i style="width:${Math.min(100, s.cpu)}%"></i></div>
+      <div class="row" style="margin-top:7px"><span class="k">Память</span><span class="v">${fmtGB(s.ram_used_gb)} / ${fmtGB(s.ram_total_gb)} ГБ</span></div>
+      <div class="bar ${ramCls}"><i style="width:${Math.min(100, s.ram_pct)}%"></i></div>
+      ${disk}
+      <div class="row" style="margin-top:7px"><span class="k">Сеть</span><span class="v">↓${fmtRate(s.net_down)} ↑${fmtRate(s.net_up)}</span></div>`;
+  }
+
+  async function loadB24(force) {
+    if (!cfg) return;
+    const now = Date.now();
+    if (!force && now - lastB24 < (cfg.refresh_secs || 60) * 1000) return;
+    lastB24 = now;
+    const res = await invoke('b24_data');
+    if (!res) return;
+    if (!res.ok) {
+      const m = `<div class="err">${esc(res.error || 'нет данных')}</div>`;
+      if (cfg.show_tasks) $('tasks').innerHTML = m;
+      if (cfg.show_comments) $('comm').innerHTML = m;
+      $('tasks-cnt').textContent = '0';
+      return;
+    }
+    const list = res.tasks || [];
+    $('tasks-cnt').textContent = list.length;
+    if (cfg.show_tasks) {
+      $('tasks').innerHTML = list.length ? list.map(t => `
+        <div class="item" data-url="${esc(t.url)}">
+          <div class="t">${esc(t.title)}</div>
+          <div class="m">#${t.id}
+            ${t.deadline ? `<span class="badge ${dCls(t.deadline)}">до ${fmtD(t.deadline)}</span>` : ''}
+            ${t.priority === '2' ? '<span class="badge">высокий</span>' : ''}
+          </div>
+        </div>`).join('') : '<div class="empty">Задач нет</div>';
+      $('tasks').querySelectorAll('.item').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
+    }
+    const comm = res.comments || [];
+    $('comm-cnt').textContent = comm.length;
+    if (cfg.show_comments) {
+      $('comm').innerHTML = comm.length ? comm.map(c => `
+        <div class="item" data-url="${esc(c.task_url)}">
+          <div class="t">${esc(c.text).slice(0, 170)}</div>
+          <div class="m">#${c.task_id} · ${fmtD(c.date)} · ${esc(c.author || ('#' + c.author_id))}</div>
+        </div>`).join('') : '<div class="empty">Новых комментариев нет</div>';
+      $('comm').querySelectorAll('.item').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
+    }
+    const maxId = comm.reduce((m, c) => Math.max(m, Number(c.task_id) * 1000 + Number(c.comment_id || 0)), 0);
+    if (maxId > 0 && seenComments > 0 && maxId > seenComments) beep();
+    if (maxId > 0) seenComments = Math.max(seenComments, maxId);
+  }
+
+  async function loadChats() {
+    if (!cfg || !cfg.show_chats) return;
+    const r = await invoke('chats');
+    if (!r) return;
+    $('chats-cnt').textContent = r.total || 0;
+    $('chats-cnt').className = 'cnt' + ((r.total || 0) > 0 ? ' hot' : '');
+    if (!r.ok) { $('chats').innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+    $('chats').innerHTML = (r.dialogs || []).length ? r.dialogs.map(d => `
+      <div class="item" data-url="${esc(d.url)}">
+        <div class="t"><span class="badge">${d.count}</span> ${esc(d.title)}</div>
+        <div class="m">${esc(d.text)}</div>
+      </div>`).join('') : '<div class="empty">Нет непрочитанных</div>';
+    $('chats').querySelectorAll('.item').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
+  }
+
+  async function loadMM() {
+    if (!cfg || !cfg.show_mm) return;
+    const r = await invoke('mm');
+    if (!r) return;
+    $('mm-cnt').textContent = r.mentions || 0;
+    $('mm-cnt').className = 'cnt' + ((r.mentions || 0) > 0 ? ' hot' : '');
+    if (!r.ok) { $('mm').innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+    $('mm').innerHTML = (r.channels || []).length ? r.channels.map(ch => `
+      <div class="item" data-url="${esc(ch.url)}">
+        <div class="t">${esc(ch.name)} <span class="badge ${ch.mentions ? 'over' : ''}">${ch.unread}${ch.mentions ? ' / @' + ch.mentions : ''}</span></div>
+        ${ch.text ? `<div class="m">${esc(ch.text)}</div>` : ''}
+      </div>`).join('') : '<div class="empty">Нет непрочитанных</div>';
+    $('mm').querySelectorAll('.item').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
+  }
+
+  async function loadTG() {
+    if (!cfg || !cfg.tg_token) { $('b-tg').style.display = 'none'; return; }
+    $('b-tg').style.display = '';
+    const r = await invoke('tg');
+    if (!r) return;
+    $('tg-cnt').textContent = (r.messages || []).length;
+    if (!r.ok) { $('tg').innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+    $('tg').innerHTML = (r.messages || []).length ? r.messages.map(m => `
+      <div class="item"><div class="t">${esc(m.text)}</div><div class="m">${esc(m.from)}</div></div>`).join('')
+      : '<div class="empty">Сообщений боту нет</div>';
+  }
+
+  async function loadCal() {
+    if (!cfg || !cfg.show_cal) return;
+    const r = await invoke('cal');
+    if (!r) return;
+    if (!r.ok) { $('cal').innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+    const ev = r.events || [];
+    $('cal-cnt').textContent = ev.length;
+    $('cal').innerHTML = ev.length ? ev.map(e => `
+      <div class="item" data-url="${esc(e.url || '')}">
+        <div class="t"><span class="cal-time">${esc(e.start_hhmm || '')}</span>${esc(e.title)}</div>
+        <div class="m">${fmtD(e.start)}${e.end_hhmm ? ' – ' + esc(e.end_hhmm) : ''}${e.kind === 'ics' ? ' · внешний' : ''}</div>
+      </div>`).join('') : '<div class="empty">Событий нет</div>';
+    $('cal').querySelectorAll('.item').forEach(el => {
+      if (el.dataset.url) el.onclick = () => invoke('open_url', { url: el.dataset.url });
+    });
+  }
+
+  async function loadWx() {
+    if (!cfg || !cfg.show_weather) return;
+    const r = await invoke('weather_now');
+    if (!r || !r.ok) { $('wx').textContent = ''; return; }
+    $('wx').textContent = `${r.icon} ${r.temp}°`;
+  }
+
+  function applyCfg() {
+    [['b-sys', 'show_system'], ['b-tasks', 'show_tasks'], ['b-comm', 'show_comments'],
+     ['b-chats', 'show_chats'], ['b-mm', 'show_mm'], ['b-cal', 'show_cal']]
+      .forEach(([id, key]) => { $(id).style.display = cfg[key] ? '' : 'none'; });
+    $('wx').style.display = cfg.show_weather ? '' : 'none';
+  }
+
+  function scheduleHide() { clearTimeout(hideTimer); hideTimer = setTimeout(() => { if (!dnd) invoke('hide_panel'); }, 650); }
+  document.addEventListener('mouseleave', scheduleHide);
+  document.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  $('act-b24').onclick = () => invoke('open_url', { url: 'https://b24.sibtrans.ru/' });
+  $('act-mm').onclick = () => invoke('open_url', { url: (cfg && cfg.mm_url) || 'https://mm.sibtrans.ru' });
+  $('act-dnd').onclick = () => { dnd = !dnd; $('act-dnd').classList.toggle('on', dnd); clearTimeout(hideTimer); };
+  $('act-task').onclick = () => { $('nt-status').textContent = ''; $('newtask').classList.add('on'); };
+  $('nt-cancel').onclick = () => $('newtask').classList.remove('on');
+  $('nt-save').onclick = async () => {
+    const title = $('nt-title').value.trim();
+    if (!title) { $('nt-status').textContent = 'Нужно название'; return; }
+    const dlm = $('nt-deadline').value;
+    const ts = dlm ? Math.floor(new Date(dlm + 'T18:00:00').getTime() / 1000) : 0;
+    $('nt-status').textContent = 'Создаю…';
+    const r = await invoke('add_task', { title, description: $('nt-desc').value, deadline: ts });
+    if (r && r.ok) {
+      $('nt-status').textContent = 'Задача #' + r.id + ' создана';
+      $('nt-title').value = ''; $('nt-desc').value = ''; $('nt-deadline').value = '';
+      loadB24(true);
+      setTimeout(() => $('newtask').classList.remove('on'), 900);
+    } else {
+      $('nt-status').textContent = 'Ошибка: ' + ((r && r.error) || 'нет ответа');
+    }
+  };
+
+  $('gear').onclick = () => {
+    $('s-webhook').value = cfg.webhook || '';
+    $('s-user').value = cfg.user_id || '';
+    $('s-refresh').value = cfg.refresh_secs || 60;
+    $('s-width').value = cfg.panel_width || 400;
+    $('s-opacity').value = cfg.opacity || 92;
+    $('s-deadline').value = cfg.deadline_filter || 'all';
+    $('s-tasks').value = cfg.tasks_limit || 12;
+    $('s-cpt').value = cfg.comments_per_task || 3;
+    $('s-mm-url').value = cfg.mm_url || '';
+    $('s-mm-token').value = cfg.mm_token || '';
+    $('s-ics').value = cfg.ics_urls || '';
+    $('s-tg').value = cfg.tg_token || '';
+    $('s-city').value = cfg.weather_city || '';
+    $('s-lat').value = cfg.weather_lat || 55.03;
+    $('s-lon').value = cfg.weather_lon || 82.92;
+    $('s-sys').checked = !!cfg.show_system;
+    $('s-tasks-on').checked = !!cfg.show_tasks;
+    $('s-comm-on').checked = !!cfg.show_comments;
+    $('s-chats-on').checked = !!cfg.show_chats;
+    $('s-mm-on').checked = !!cfg.show_mm;
+    $('s-cal-on').checked = !!cfg.show_cal;
+    $('s-wx-on').checked = !!cfg.show_weather;
+    $('s-sound').checked = !!cfg.sound;
+    $('settings').classList.add('on');
+  };
+  $('s-cancel').onclick = () => $('settings').classList.remove('on');
+  $('s-quit').onclick = () => invoke('quit_app');
+  $('s-save').onclick = async () => {
+    cfg = Object.assign({}, cfg, {
+      webhook: $('s-webhook').value.trim(),
+      user_id: parseInt($('s-user').value || '0', 10),
+      refresh_secs: Math.max(15, parseInt($('s-refresh').value || '60', 10)),
+      panel_width: Math.max(280, Math.min(900, parseInt($('s-width').value || '400', 10))),
+      opacity: Math.max(40, Math.min(100, parseInt($('s-opacity').value || '92', 10))),
+      deadline_filter: $('s-deadline').value,
+      tasks_limit: Math.max(3, parseInt($('s-tasks').value || '12', 10)),
+      comments_per_task: Math.max(1, parseInt($('s-cpt').value || '3', 10)),
+      mm_url: $('s-mm-url').value.trim(),
+      mm_token: $('s-mm-token').value.trim(),
+      ics_urls: $('s-ics').value,
+      tg_token: $('s-tg').value.trim(),
+      weather_city: $('s-city').value.trim(),
+      weather_lat: parseFloat($('s-lat').value || '55.03'),
+      weather_lon: parseFloat($('s-lon').value || '82.92'),
+      show_system: $('s-sys').checked,
+      show_tasks: $('s-tasks-on').checked,
+      show_comments: $('s-comm-on').checked,
+      show_chats: $('s-chats-on').checked,
+      show_mm: $('s-mm-on').checked,
+      show_cal: $('s-cal-on').checked,
+      show_weather: $('s-wx-on').checked,
+      sound: $('s-sound').checked
+    });
+    await invoke('save_config', { cfg });
+    applyCfg();
+    $('settings').classList.remove('on');
+    refreshAll(true);
+  };
+  $('refresh').onclick = () => refreshAll(true);
+
+  async function refreshAll(force) {
+    await Promise.all([loadSys(), loadB24(force), loadChats(), loadMM(), loadCal(), loadTG(), loadWx()]);
+  }
+
+  (async function init() {
+    cfg = await invoke('get_config');
+    if (!cfg) cfg = { refresh_secs: 60, opacity: 92 };
+    applyCfg();
+    tickClock();
+    setInterval(tickClock, 1000);
+    await refreshAll(true);
+    setInterval(loadSys, 3000);
+    setInterval(() => loadB24(false), 5000);
+    setInterval(() => {
+      if (Date.now() - lastExtra > (cfg.refresh_secs || 60) * 1000) {
+        lastExtra = Date.now(); loadChats(); loadMM(); loadCal(); loadTG();
+      }
+    }, 5000);
+    setInterval(loadWx, 900000);
+    try {
+      if (T && T.event) {
+        T.event.listen('panel_shown', () => refreshAll(false));
+        T.event.listen('blocked', e => { if (e.payload) invoke('hide_panel'); });
+      }
+    } catch (e) {}
+  })();
+})();
+</script>
+</body>
+</html>
