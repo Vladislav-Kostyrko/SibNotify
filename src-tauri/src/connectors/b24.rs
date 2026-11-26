@@ -140,3 +140,74 @@ pub fn probe(webhook: String, user_id: i64) -> Value {
         Err(e) => json!({"ok": false, "error": format!("сеть: {e}")}),
     }
 }
+
+/// Закрыть задачу в Б24.
+pub async fn task_done(webhook: &str, id: &str) -> Value {
+    let base = webhook.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return json!({"ok": false, "error": "вебхук не задан"});
+    }
+    let c = match client() {
+        Ok(c) => c,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
+    let body = json!({ "taskId": id });
+    match c
+        .post(format!("{}/tasks.task.complete.json", base))
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(r) => match r.json::<Value>().await {
+            Ok(v) => {
+                if v.get("result").is_some() {
+                    json!({"ok": true})
+                } else {
+                    json!({"ok": false, "error": b24_err(&v)})
+                }
+            }
+            Err(e) => json!({"ok": false, "error": format!("ответ: {e}")}),
+        },
+        Err(e) => json!({"ok": false, "error": format!("сеть: {e}")}),
+    }
+}
+
+/// Отложить задачу: новый дедлайн через `minutes` минут.
+pub async fn task_snooze(webhook: &str, id: &str, minutes: i64) -> Value {
+    let base = webhook.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return json!({"ok": false, "error": "вебхук не задан"});
+    }
+    let c = match client() {
+        Ok(c) => c,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
+    let deadline = now_ts() + minutes.max(5) * 60;
+    let body = json!({ "taskId": id, "fields": { "DEADLINE": deadline } });
+    match c
+        .post(format!("{}/tasks.task.update.json", base))
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(r) => match r.json::<Value>().await {
+            Ok(v) => {
+                if v.get("result").is_some() {
+                    json!({"ok": true, "deadline": deadline})
+                } else {
+                    json!({"ok": false, "error": b24_err(&v)})
+                }
+            }
+            Err(e) => json!({"ok": false, "error": format!("ответ: {e}")}),
+        },
+        Err(e) => json!({"ok": false, "error": format!("сеть: {e}")}),
+    }
+}
+
+fn b24_err(v: &Value) -> String {
+    v.get("error_description")
+        .or_else(|| v.get("error"))
+        .and_then(|x| x.as_str())
+        .unwrap_or("Б24 отказал")
+        .to_string()
+}

@@ -110,6 +110,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
+            export_config,
+            import_config,
             show_panel,
             hide_panel,
             drag_start,
@@ -133,6 +135,8 @@ fn main() {
             weather_now,
             chats,
             add_task,
+            task_done,
+            task_snooze,
             toggle_side,
             probe,
             mail,

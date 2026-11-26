@@ -337,3 +337,18 @@ pub(crate) fn chrono_now() -> i64 {
         .unwrap_or(0)
 }
 
+#[tauri::command]
+pub(crate) async fn task_done(st: tauri::State<'_, AppState>, id: String) -> Result<Value, String> {
+    let hook = st.cfg.lock().unwrap().webhook.clone();
+    Ok(connectors::task_done(&hook, &id).await)
+}
+
+#[tauri::command]
+pub(crate) async fn task_snooze(
+    st: tauri::State<'_, AppState>,
+    id: String,
+    minutes: Option<i64>,
+) -> Result<Value, String> {
+    let hook = st.cfg.lock().unwrap().webhook.clone();
+    Ok(connectors::task_snooze(&hook, &id, minutes.unwrap_or(60)).await)
+}

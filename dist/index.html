@@ -117,7 +117,13 @@
   .bar.bad > i{background:linear-gradient(90deg,var(--bad),#ff9a9a);}
 
   .item{padding:7px 8px;border-bottom:1px dashed rgba(255,255,255,.07);cursor:pointer;border-radius:8px;
-    transition:background .12s;}
+    transition:background .12s;position:relative;}
+  .item .acts{position:absolute;right:5px;top:5px;display:none;gap:4px;}
+  .item:hover .acts{display:flex;}
+  .qa{width:21px;height:21px;display:grid;place-items:center;border-radius:6px;
+    background:rgba(255,255,255,.08);font-size:0.8em;color:#cbd3e1;cursor:pointer;}
+  .qa:hover{background:var(--accent);color:#06101d;}
+  .qa.ok{background:rgba(74,200,120,.25);color:#8ff0b7;}
   .item:last-child{border-bottom:none;}
   .item:hover{background:rgba(255,255,255,.05);}
   .item .t{font-size:0.92em;line-height:1.35;word-break:break-word;}
@@ -199,7 +205,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.11.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.12.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -295,8 +301,15 @@
       <label class="chk"><input type="checkbox" id="s-sound" /> Звук при новых событиях</label>
       <label class="chk"><input type="checkbox" id="s-toast" /> Тост-уведомления Windows</label>
       <label class="chk"><input type="checkbox" id="s-autostart" /> Запускать при входе в Windows</label>
-      <div class="hint">Приложение живёт в трее: иконка рядом с часами, меню — показать / обновить / выход.</div>
+      <div class="field">Важные отправители (почта, через запятую)<input id="s-vip" placeholder="boss@sibtrans.ru, @sibtrans.ru" /></div>
+      <div class="hint">Новое письмо от них придёт красным тостом, даже если почта в фоне.</div>
       <div class="btns"><button class="btn" id="s-toast-test">Проверить уведомление</button></div>
+      <div class="btns">
+        <button class="btn" id="s-export">Выгрузить конфиг</button>
+        <button class="btn" id="s-import">Загрузить конфиг</button>
+      </div>
+      <div class="field" id="s-imp-wrap" style="display:none">Вставь JSON конфига<textarea id="s-imp" rows="6" placeholder='{"blocks": [...]}'></textarea></div>
+      <div id="s-cfg-status" class="hint"></div>
 
       <div class="btns">
         <button class="btn" data-close="sh-settings">Отмена</button>
@@ -365,13 +378,22 @@
     t = t.replace(/https?:\/\/[^\s"'<>)]+/g, u => { try { return new URL(u).host; } catch (e) { return u.slice(0, 40); } });
     return t.length > 180 ? t.slice(0, 180) + '…' : t;
   }
-  function beep() {
-    if (!cfg || !cfg.sound || dnd) return;
+  function beep(sev) {
+    if (!cfg || cfg.sound === false || dnd) return;
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = 'sine'; o.frequency.value = 880; g.gain.value = .05;
-      o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + .12);
+      const critical = sev === 'critical';
+      const play = (freq, at, dur, vol) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = critical ? 'triangle' : 'sine';
+        o.frequency.value = freq;
+        g.gain.value = vol;
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(audioCtx.currentTime + at);
+        o.stop(audioCtx.currentTime + at + dur);
+      };
+      if (critical) { play(660, 0, .12, .06); play(520, .16, .16, .06); }
+      else play(880, 0, .12, .04);
     } catch (e) {}
   }
 
@@ -828,14 +850,26 @@
 
   // тосты: показываем только при изменении набора (не на каждом обновлении)
   const seenKeys = {};
-  function notifyNew(kind, title, items) {
+  function toastNow(title, body, opts) {
+    if (!cfg || dnd || cfg.toast === false) return;
+    const critical = !!(opts && opts.critical);
+    invoke('toast', {
+      title: title,
+      body: String(body || '').slice(0, 240),
+      color: critical ? '#ff5c5c' : (cfg.accent || '#4aa3ff'),
+      ms: critical ? 9000 : 6500,
+    });
+    beep(critical ? 'critical' : 'normal');
+  }
+
+  function notifyNew(kind, title, items, opts) {
     if (!items || !items.length) return;
     const key = items.slice(0, 5).join('|');
     const first = seenKeys[kind] === undefined;
     if (seenKeys[kind] === key) return;
     seenKeys[kind] = key;
-    if (first || dnd || (cfg && cfg.toast === false)) return;
-    invoke('notify', { title: title, body: items.slice(0, 2).join(' · ').slice(0, 200) });
+    if (first) return;
+    toastNow(title, items.slice(0, 2).join(' · '), opts);
   }
 
   async function tasksBlock(b, body, i) {
@@ -844,13 +878,49 @@
     if (!r.ok) { body.innerHTML = `<div class="err">${esc(shortErr(r.error))}</div>`; return; }
     const list = (r.tasks || []).slice(0, b.limit || 12);
     setCnt(i, list.length);
+    // дедлайн сегодня/просрочено — отдельный «красный» тост, новые задачи — обычный
+    const dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
+    const hot = list.filter(t => {
+      if (!t.deadline) return false;
+      const d = new Date(String(t.deadline).replace(' ', 'T'));
+      return !isNaN(d) && d <= dayEnd;
+    });
+    if (hot.length) notifyNew('tasks-due', 'Дедлайн сегодня', hot.map(t => t.title), { critical: true });
     notifyNew('tasks', 'Задачи Б24', list.map(t => t.title));
     body.innerHTML = list.length ? list.map(t => `
       <div class="item" data-url="${esc(t.url)}">
         <div class="t">${esc(t.title)}</div>
         <div class="m">#${t.id}${t.deadline ? ` <span class="badge ${dCls(t.deadline)}">${fmtD(t.deadline)}</span>` : ''}</div>
+        <div class="acts">
+          <span class="qa" data-done="${esc(t.id)}" title="Закрыть задачу">✓</span>
+          <span class="qa" data-snz="${esc(t.id)}" title="Отложить на час">⏰</span>
+        </div>
       </div>`).join('') : '<div class="empty">Задач нет</div>';
     body.querySelectorAll('.item').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
+    body.querySelectorAll('[data-done]').forEach(el => el.onclick = async e => {
+      e.stopPropagation();
+      el.textContent = '…';
+      const res = await invoke('task_done', { id: el.dataset.done });
+      if (res && res.ok) {
+        el.classList.add('ok'); el.textContent = '✓';
+        const item = el.closest('.item');
+        setTimeout(() => { item && item.remove(); }, 400);
+        toastNow('Задача закрыта', item ? item.querySelector('.t').textContent : '');
+      } else {
+        el.textContent = '✕';
+        el.title = (res && res.error) || 'не получилось';
+      }
+    });
+    body.querySelectorAll('[data-snz]').forEach(el => el.onclick = async e => {
+      e.stopPropagation();
+      const before = el.textContent;
+      el.textContent = '…';
+      const res = await invoke('task_snooze', { id: el.dataset.snz, minutes: 60 });
+      el.textContent = res && res.ok ? '✓' : '✕';
+      if (res && res.ok) toastNow('Отложено на час', el.closest('.item') ? el.closest('.item').querySelector('.t').textContent : '');
+      else el.title = (res && res.error) || 'не получилось';
+      setTimeout(() => { el.textContent = before; }, 1600);
+    });
   }
 
   async function commentsBlock(b, body, i) {
@@ -890,7 +960,7 @@
     setCnt(i, r.mentions || 0, (r.mentions || 0) > 0);
     if (!r.ok) { body.innerHTML = `<div class="err">${esc(shortErr(r.error))}</div>`; return; }
     const list = (r.channels || []).slice(0, b.limit || 6);
-    notifyNew('mm', 'Упоминание в Mattermost', list.filter(c => c.mentions).map(c => c.name));
+    notifyNew('mm', 'Упоминание в Mattermost', list.filter(c => c.mentions).map(c => c.name), { critical: true });
     body.innerHTML = list.length ? list.map(ch => {
       const msgs = (ch.msgs || []).map(m =>
         `<div class="m">${esc(m.who || '')}${m.who ? ': ' : ''}${esc(m.text)} · ${esc(m.at || '')}</div>`).join('');
@@ -1015,6 +1085,11 @@
       return;
     }
     const list = (r.messages || []).slice(0, b.limit || 6);
+    const vip = String(cfg.vip || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (vip.length) {
+      const hits = list.filter(m => !m.seen && vip.some(v => String(m.from || '').toLowerCase().includes(v)));
+      if (hits.length) notifyNew('mail-vip', 'Письмо от важного', hits.map(m => (m.from || '') + ': ' + (m.subject || '')), { critical: true });
+    }
     body.innerHTML = list.length ? list.map(m => {
       const t = mailTarget(m.subject || '');
       return `<div class="item"${t ? ` data-url="${esc(t)}"` : ''}>
@@ -1371,6 +1446,7 @@
     $('s-accent').value = cfg.accent || '#4aa3ff';
     $('s-blur').checked = cfg.blur !== false;
     $('s-sound').checked = !!cfg.sound;
+    if ($('s-vip')) $('s-vip').value = cfg.vip || '';
     $('s-toast').checked = cfg.toast !== false;
     invoke('monitors').then(mons => {
       if (!Array.isArray(mons) || !mons.length) return;
@@ -1381,6 +1457,30 @@
   };
   $('s-fs').oninput = () => { $('s-fs-val').textContent = $('s-fs').value + ' px'; };
   const tt = $('s-toast-test');
+  if ($('s-export')) $('s-export').onclick = async () => {
+    try {
+      const path = await invoke('export_config');
+      $('s-cfg-status').textContent = 'Сохранил: ' + path;
+    } catch (e) { $('s-cfg-status').textContent = 'Ошибка: ' + e; }
+  };
+  if ($('s-import')) $('s-import').onclick = async () => {
+    const wrap = $('s-imp-wrap');
+    if (wrap.style.display === 'none') {
+      wrap.style.display = '';
+      $('s-cfg-status').textContent = 'Вставь содержимое файла конфига и нажми «Загрузить конфиг» ещё раз';
+      $('s-import').textContent = 'Применить';
+      return;
+    }
+    try {
+      await invoke('import_config', { json: $('s-imp').value });
+      $('s-cfg-status').textContent = 'Загружено, перечитываю…';
+      cfg = (await invoke('get_config')) || {};
+      if (!cfg.blocks) cfg.blocks = [];
+      applyStyle();
+      closeSheet('sh-settings');
+      render();
+    } catch (e) { $('s-cfg-status').textContent = 'Ошибка: ' + e; }
+  };
   if (tt) tt.onclick = () => {
     invoke('toast', { title: 'SibNotify', body: 'Проверка уведомлений — если видишь это, тосты работают', color: cfg.accent || '#4aa3ff', ms: 6000 });
     invoke('notify', { title: 'SibNotify', body: 'Проверка уведомлений' });
@@ -1404,6 +1504,7 @@
     cfg.accent = $('s-accent').value;
     cfg.blur = $('s-blur').checked;
     cfg.sound = $('s-sound').checked;
+    if ($('s-vip')) cfg.vip = $('s-vip').value.trim();
     cfg.toast = $('s-toast').checked;
     try { await invoke('set_autostart', { enabled: $('s-autostart').checked }); } catch (e) {}
     await saveCfg();
