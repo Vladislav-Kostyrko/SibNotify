@@ -212,44 +212,29 @@ fn place(app: &AppHandle) {
 
 #[cfg(windows)]
 fn compute_blocked() -> bool {
-    use windows::Win32::Foundation::{HWND, RECT};
-    use windows::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
-    };
     use windows::Win32::UI::Shell::{
         SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE,
         QUNS_RUNNING_D3D_FULL_SCREEN,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowRect};
 
     unsafe {
         let state = match SHQueryUserNotificationState() {
             Ok(s) => s,
             Err(_) => return false,
         };
-        if state == QUNS_BUSY
-            || state == QUNS_RUNNING_D3D_FULL_SCREEN
-            || state == QUNS_PRESENTATION_MODE
-        {
-            return true;
-        }
-        let fg: HWND = GetForegroundWindow();
-        if fg.0.is_null() {
-            return false;
-        }
-        let mut rect = RECT::default();
-        if GetWindowRect(fg, &mut rect).is_err() {
-            return false;
-        }
-        let mon = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
-        let mut mi = MONITORINFO::default();
-        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
-        if !GetMonitorInfoW(mon, &mut mi).as_bool() {
-            return false;
-        }
-        let m = mi.rcMonitor;
-        rect.left <= m.left && rect.top <= m.top && rect.right >= m.right && rect.bottom >= m.bottom
+        // QUNS_BUSY (2) выставляется и обычными развёрнутыми приложениями/презентациями,
+        // из-за него панель пропадала «сама». Реагируем только на настоящий D3D-фуллскрин (игры).
+        state == QUNS_RUNNING_D3D_FULL_SCREEN && cfg_hide_in_fullscreen()
     }
+}
+
+fn cfg_hide_in_fullscreen() -> bool {
+    let p = config_dir_guess().join("config.json");
+    let txt = std::fs::read_to_string(p).unwrap_or_default();
+    let v: Value = serde_json::from_str(&txt).unwrap_or(json!({}));
+    v.get("hide_in_fullscreen")
+        .and_then(|x| x.as_bool())
+        .unwrap_or(true)
 }
 
 #[cfg(not(windows))]
@@ -259,27 +244,35 @@ fn compute_blocked() -> bool {
 
 fn watcher(app: AppHandle) {
     std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_millis(500));
+        std::thread::sleep(Duration::from_millis(700));
         let blocked = compute_blocked();
         let st = app.state::<AppState>();
         let was = st.blocked.swap(blocked, Ordering::SeqCst);
-        if was == blocked {
-            continue;
+        if was != blocked {
+            if blocked {
+                if let Some(w) = app.get_webview_window("panel") {
+                    let _ = w.hide();
+                }
+                if let Some(w) = app.get_webview_window("strip") {
+                    let _ = w.hide();
+                }
+            } else {
+                place(&app);
+            }
+            let _ = app.emit("blocked", blocked);
         }
-        if blocked {
-            if let Some(w) = app.get_webview_window("panel") {
-                let _ = w.hide();
-            }
+        // самолечение: если не заблокировано и триггер включён, он должен быть на экране
+        if !blocked {
+            let strip_on = st.cfg.lock().unwrap().strip_enabled;
             if let Some(w) = app.get_webview_window("strip") {
-                let _ = w.hide();
-            }
-        } else {
-            place(&app);
-            if let Some(w) = app.get_webview_window("strip") {
-                let _ = w.show();
+                let vis = w.is_visible().unwrap_or(true);
+                if strip_on && !vis {
+                    let _ = w.show();
+                } else if !strip_on && vis {
+                    let _ = w.hide();
+                }
             }
         }
-        let _ = app.emit("blocked", blocked);
     });
 }
 
@@ -1330,6 +1323,10 @@ fn build_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // второй запуск не создаёт новую копию — просто показываем панель
+            show_panel_inner(app);
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(build_shortcut_plugin())
         .setup(|app| {
