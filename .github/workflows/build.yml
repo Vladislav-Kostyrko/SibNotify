@@ -16,13 +16,19 @@ jobs:
         include:
           - os: windows-latest
             name: windows-x64
-            artifact: SibNotify-windows-x64
+            artifact: SibNotify-windows
+            bundles: nsis,msi
+            target: ""
           - os: ubuntu-22.04
             name: linux-x64
-            artifact: SibNotify-linux-x64
+            artifact: SibNotify-linux
+            bundles: deb,appimage
+            target: ""
           - os: macos-latest
             name: macos-universal
-            artifact: SibNotify-macos-universal
+            artifact: SibNotify-macos
+            bundles: dmg
+            target: "--target universal-apple-darwin"
 
     steps:
       - uses: actions/checkout@v4
@@ -43,25 +49,21 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - name: Build installers
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: ${{ matrix.name == 'macos-universal' && '--target universal-apple-darwin' || '' }}
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
 
-      - name: Show what was built
+      - name: Build bundles
         shell: bash
         run: |
-          echo "== bundle tree =="
-          find src-tauri/target -path '*bundle*' -type f -printf '%p %s bytes\n' 2>/dev/null || \
-          find src-tauri/target -path '*bundle*' -type f -exec ls -la {} \;
+          cargo tauri build --bundles ${{ matrix.bundles }} ${{ matrix.target }} 2>&1 | tail -40
+          echo "=== результат ==="
+          find . -path '*bundle*' -type f -exec ls -la {} \; | tail -20
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             src-tauri/target/**/bundle/nsis/*.exe
             src-tauri/target/**/bundle/msi/*.msi
