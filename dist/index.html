@@ -782,6 +782,8 @@
       return;
     }
     const sym = r.currency === 'USD' ? '$' : r.currency === 'CNY' ? '¥' : (r.currency || '');
+    const hasReal = (r.tokens_today !== null && r.tokens_today !== undefined) || (r.cost_today !== null && r.cost_today !== undefined);
+    const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(2) + ' M' : n >= 1e3 ? (n / 1e3).toFixed(1) + ' K' : String(Math.round(n));
     const today = new Date().toISOString().slice(0, 10);
     let hist = Array.isArray(cfg.ai_hist) ? cfg.ai_hist.slice() : [];
     const before = hist.length ? hist[hist.length - 1] : null;
@@ -791,24 +793,28 @@
     cfg.ai_hist = hist.slice(-30);
     if (!cfg._aiSaved || Date.now() - cfg._aiSaved > 900000) { cfg._aiSaved = Date.now(); saveCfg(); }
     const vals = cfg.ai_hist.map(p => p.v);
+    const costToday = hasReal && r.cost_today != null ? r.cost_today : spentToday;
+    const costLine = `<div class="row"><span class="k">Потрачено сегодня</span><span class="v">${sym}${costToday.toFixed(2)}</span></div>`;
+    const tokLine = hasReal && r.tokens_today != null
+      ? `<div class="row"><span class="k">Токенов сегодня</span><span class="v">${fmtTok(r.tokens_today)}</span></div>` : '';
 
     if (view === 'chart') {
       body.innerHTML = `<div class="row"><span class="k">Остаток</span><span class="v">${sym}${r.balance.toFixed(2)}</span></div>
         ${spark(vals, 200, 40)}
-        <div class="row"><span class="k">За сегодня</span><span class="v">${sym}${spentToday.toFixed(2)}</span></div>`;
+        ${costLine}${tokLine}`;
       return;
     }
     if (view === 'table') {
       body.innerHTML = `<div class="stable">
         <div class="srow"><span>Остаток</span><b>${sym}${r.balance.toFixed(2)}</b></div>
-        <div class="srow"><span>Траты сегодня</span><b>${sym}${spentToday.toFixed(2)}</b></div>
+        <div class="srow"><span>Траты сегодня</span><b>${sym}${costToday.toFixed(2)}</b></div>
+        ${r.tokens_today != null ? `<div class="srow"><span>Токенов сегодня</span><b>${fmtTok(r.tokens_today)}</b></div>` : ''}
         ${r.used !== undefined ? `<div class="srow"><span>Всего израсходовано</span><b>${sym}${(+r.used).toFixed(2)}</b></div>` : ''}
-        <div class="srow"><span>Провайдер</span><b>${esc(r.provider || '')}</b></div>
       </div>`;
       return;
     }
     body.innerHTML = `<div class="ai-big"><span class="n">${sym}${r.balance.toFixed(2)}</span><span class="u">осталось</span></div>
-      <div class="row"><span class="k">Потрачено сегодня</span><span class="v">${sym}${spentToday.toFixed(2)}</span></div>
+      ${costLine}${tokLine}
       ${spark(vals, 200, 40)}`;
   }
 
@@ -1249,7 +1255,12 @@
         </select></div>
         <div class="field">API-ключ<input id="f-ai-key" value="${esc(cfg.ai_key || '')}" placeholder="sk-..." /></div>
       </div>
-      <div class="hint">Баланс берётся с API провайдера: DeepSeek и Moonshot отдают остаток в юанях, OpenRouter — в долларах. Токены за день провайдеры не отдают, поэтому показываю траты за день по падению остатка.</div>`;
+      <div class="hint">Баланс берётся с API провайдера. Чтобы видеть токены и траты за день, войди в платформу DeepSeek: «Войти» → логин → «Забрать токен».</div>
+      <div class="btns">
+        <button class="btn" id="f-ds-login">Войти в DeepSeek</button>
+        <button class="btn" id="f-ds-grab">Забрать токен</button>
+      </div>
+      <div id="f-ds-status" class="hint"></div>`;
     }
     if (type === 'system') {
       h += `<div class="field">Вид<select id="f-view">
@@ -1311,6 +1322,20 @@
       const c = CITIES[+$('f-citysel').value];
       if (!c) return;
       $('f-lat').value = c[1]; $('f-lon').value = c[2];
+    };
+    if ($('f-ds-login')) $('f-ds-login').onclick = async () => {
+      const r = await invoke('ds_login');
+      $('f-ds-status').textContent = (r && r.ok)
+        ? 'Войди в открывшемся окне платформы, потом жми «Забрать токен».'
+        : ('Ошибка: ' + ((r && r.error) || 'нет ответа'));
+    };
+    if ($('f-ds-grab')) $('f-ds-grab').onclick = async () => {
+      $('f-ds-status').textContent = 'Забираю токен…';
+      const r = await invoke('ds_grab');
+      $('f-ds-status').textContent = (r && r.ok)
+        ? ('Токен сохранён, показываю реальные траты. Символов: ' + r.len)
+        : ('Ошибка: ' + ((r && r.error) || 'нет ответа'));
+      if (r && r.ok) loadAll();
     };
     if ($('f-mm-login')) $('f-mm-login').onclick = async () => {
       cfg.mm_url = (($('f-mm-url') || {}).value || cfg.mm_url || '').trim();

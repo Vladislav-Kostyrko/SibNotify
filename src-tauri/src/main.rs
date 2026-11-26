@@ -153,6 +153,8 @@ fn main() {
             hide_toast,
             toast_ready,
             ai_usage,
+            ds_login,
+            ds_grab,
             set_autostart,
             autostart_state,
             sys_stats,
