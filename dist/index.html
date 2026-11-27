@@ -277,7 +277,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.15.1</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.15.2</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -489,7 +489,7 @@
     bell:    { name: 'Колокольчик',        fn: (n, c) => { n(1046, 1046, 0, .5, .9); n(1568, 1568, 0, .38, .35); if (c) { n(880, 880, .3, .6, .8); n(1320, 1320, .3, .45, .3); } } },
     coin:    { name: 'Монетка',            fn: (n, c) => { n(988, 988, 0, .08, .9); n(1319, 1319, .08, .3, .7); if (c) n(659, 659, .34, .3, .8); } },
     pop:     { name: 'Поп',                fn: (n, c) => { n(320, 720, 0, .1, 1); if (c) { n(300, 240, .12, .2, .9); } } },
-    techies: { name: 'Techies — мина (ульт)', fn: (n, c) => {
+    techies: { name: 'Techies — мина (ульт)', file: 'mine.mp3', fn: (n, c) => {
         // два высоких «пика» мины и низкий взрыв на критичном
         n(1180, 1180, 0, .07, 1, 'square');
         n(1180, 1180, .11, .07, .85, 'square');
@@ -509,6 +509,17 @@
     } catch (e) { customSound = null; }
   }
 
+  const audioCache = {};
+  function playFile(name, gain) {
+    try {
+      const src = (audioCache[name] || (audioCache[name] = new Audio(name)));
+      const a = src.cloneNode();
+      a.volume = Math.max(0.05, Math.min(1, gain));
+      a.play().catch(() => {});
+      return true;
+    } catch (e) { return false; }
+  }
+
   function playCustom(critical) {
     try {
       if (!customSound) return false;
@@ -525,6 +536,8 @@
     if (!cfg || cfg.sound === false || dnd) return;
     try {
       if (playCustom(sev === 'critical')) return;
+      const preDef = SOUNDS[cfg.sound_pack] || {};
+      if (preDef.file && playFile(preDef.file, (cfg.sound_vol === undefined ? 90 : cfg.sound_vol) / 100)) return;
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const ctx = audioCtx;
       if (ctx.state === 'suspended') ctx.resume();
