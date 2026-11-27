@@ -268,7 +268,10 @@
 
   /* ===== 0.16: мини-режим, неделя, превью письма, оффлайн ===== */
   body.mini .grid{grid-template-columns:1fr!important;}
-  body.mini .blk{grid-column:span 12!important;}
+  body.mini .blk{grid-column:span 12!important;height:auto!important;min-height:0!important;}
+  body.mini .blk > h3{border-bottom:0;}
+  body.mini .blk.open > h3{border-bottom:1px solid var(--line);}
+  body.mini .blk.open .bd{max-height:52vh;}
   body.mini .blk .bd{display:none;}
   body.mini .blk.open .bd{display:block;}
   body.mini .blk h3{cursor:pointer;}
@@ -301,7 +304,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.5</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.6</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>

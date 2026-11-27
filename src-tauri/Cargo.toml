@@ -1,6 +1,6 @@
 [package]
 name = "sibnotify"
-version = "0.16.5"
+version = "0.16.6"
 description = "Sibtrans desktop notification panel"
 edition = "2021"
 
