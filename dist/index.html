@@ -208,9 +208,9 @@
   @keyframes pulseb{0%,100%{box-shadow:0 0 0 0 rgba(255,92,92,0)}50%{box-shadow:0 0 0 4px rgba(255,92,92,.13)}}
 
   /* скелетоны при загрузке */
-  .sk{background:linear-gradient(90deg,rgba(255,255,255,.045) 25%,rgba(255,255,255,.10) 37%,rgba(255,255,255,.045) 63%);
+  .sksh{background:linear-gradient(90deg,rgba(255,255,255,.045) 25%,rgba(255,255,255,.10) 37%,rgba(255,255,255,.045) 63%);
       background-size:400% 100%;animation:sh 1.5s ease infinite;border-radius:6px;height:10px;margin:7px 0;}
-  .sk.s2{width:72%} .sk.s3{width:88%}
+  .sksh.s2{width:72%} .sksh.s3{width:88%}
   @keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
 
   /* глубина */
@@ -263,7 +263,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.14.3</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.14.4</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -813,7 +813,7 @@
   }
 
   /* скелетон, пока данных ещё нет */
-  const skel = () => '<div class="sk"></div><div class="sk s2"></div><div class="sk s3"></div>';
+  const skel = () => '<div class="sksh"></div><div class="sksh s2"></div><div class="sksh s3"></div>';
 
   /* плавное появление: панель целиком + блоки лесенкой */
   function freshPanel() {
