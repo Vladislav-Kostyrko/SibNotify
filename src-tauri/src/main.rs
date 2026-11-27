@@ -15,6 +15,7 @@ use commands::misc::*;
 use commands::mm::*;
 use commands::system::*;
 use commands::ui::*;
+use commands::update::*;
 use config::{load_config, Config};
 use hotkey::build_shortcut_plugin;
 use state::AppState;
@@ -175,7 +176,11 @@ fn main() {
             open_url,
             quit_app,
             js_log,
-            sound_file
+            sound_file,
+            app_version,
+            check_update,
+            apply_update,
+            task_reopen
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

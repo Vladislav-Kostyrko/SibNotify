@@ -89,6 +89,8 @@ pub struct Config {
     pub(crate) sound_vol: u32,
     #[serde(default = "d_sound_pack")]
     pub(crate) sound_pack: String,
+    #[serde(default)]
+    pub(crate) mini: bool,
     #[serde(default = "d_true")]
     pub(crate) blur: bool,
     #[serde(default)]
@@ -180,6 +182,7 @@ impl Default for Config {
             block_colors: true,
             sound_vol: d_sound_vol(),
             sound_pack: d_sound_pack(),
+            mini: false,
             blur: true,
             vip: String::new(),
             dnd: false,

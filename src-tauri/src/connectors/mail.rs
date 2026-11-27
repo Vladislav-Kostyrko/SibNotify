@@ -76,7 +76,7 @@ fn mail_blocking(host: &str, port: u64, user: &str, pass: &str, tls: bool, limit
         all.sort_unstable();
         let ids: Vec<u32> = all.into_iter().rev().take(limit).collect();
         for id in ids {
-            if let Ok(fetch) = sess.fetch(format!("{}", id), "(ENVELOPE INTERNALDATE FLAGS)") {
+            if let Ok(fetch) = sess.fetch(format!("{}", id), "(ENVELOPE INTERNALDATE FLAGS BODY.PEEK[TEXT]<0.900>)") {
                 for m in fetch.iter() {
                     let env = match m.envelope() {
                         Some(e) => e,
@@ -116,7 +116,13 @@ fn mail_blocking(host: &str, port: u64, user: &str, pass: &str, tls: bool, limit
                         .internal_date()
                         .map(|d| d.format("%d.%m %H:%M").to_string())
                         .unwrap_or_default();
+                    let raw_body = m
+                        .text()
+                        .map(|t| String::from_utf8_lossy(t).to_string())
+                        .or_else(|| m.body().map(|b| String::from_utf8_lossy(b).to_string()))
+                        .unwrap_or_default();
                     out.push(json!({
+                        "preview": mail_preview(&raw_body),
                         "subject": subject.chars().take(120).collect::<String>(),
                         "from": from,
                         "date": date,
@@ -128,4 +134,40 @@ fn mail_blocking(host: &str, port: u64, user: &str, pass: &str, tls: bool, limit
     }
     let _ = sess.logout();
     json!({"ok": true, "messages": out, "unread": unread, "error": Value::Null})
+}
+
+/// Первые строки письма без html-тегов, цитат и мусора — для предпросмотра в панели.
+fn mail_preview(raw: &str) -> String {
+    let mut t = String::with_capacity(raw.len().min(400));
+    let mut in_tag = false;
+    let mut body_part = false;
+    for ch in raw.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => { in_tag = false; t.push(' '); }
+            c if !in_tag => t.push(c),
+            _ => {}
+        }
+    }
+    let t = t
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">");
+    let mut out = String::new();
+    for line in t.lines() {
+        let l = line.trim();
+        if l.is_empty() || l.starts_with('>') || l.starts_with("--") {
+            continue;
+        }
+        out.push_str(l);
+        out.push(' ');
+        if out.chars().count() > 220 {
+            break;
+        }
+        body_part = true;
+    }
+    let _ = body_part;
+    out.trim().chars().take(220).collect()
 }

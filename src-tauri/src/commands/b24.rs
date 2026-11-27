@@ -352,3 +352,23 @@ pub(crate) async fn task_snooze(
     let hook = st.cfg.lock().unwrap().webhook.clone();
     Ok(connectors::task_snooze(&hook, &id, minutes.unwrap_or(60)).await)
 }
+
+/// Вернуть закрытую задачу в работу (для Ctrl+Z).
+#[tauri::command]
+pub(crate) async fn task_reopen(st: tauri::State<'_, crate::state::AppState>, id: String) -> Result<Value, String> {
+    let (base, uid) = {
+        let c = st.cfg.lock().unwrap();
+        (c.webhook.clone(), c.user_id)
+    };
+    if base.is_empty() {
+        return Ok(json!({"ok": false, "error": "вебхук не указан"}));
+    }
+    let cl = reqwest::Client::new();
+    let url = format!("{}tasks.task.update", base);
+    let body = json!({"id": id, "fields": {"STATUS": 2}});
+    let r = cl.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
+    let v: Value = r.json().await.unwrap_or(Value::Null);
+    let ok = v.get("error").is_none();
+    let _ = uid;
+    Ok(json!({"ok": ok, "error": v.get("error_description").cloned().unwrap_or(Value::Null)}))
+}

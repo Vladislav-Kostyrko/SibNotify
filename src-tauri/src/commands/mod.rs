@@ -6,3 +6,4 @@ pub mod misc;
 pub mod mm;
 pub mod system;
 pub mod ui;
+pub mod update;

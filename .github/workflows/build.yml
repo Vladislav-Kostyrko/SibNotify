@@ -62,6 +62,17 @@ jobs:
           echo "=== результат ==="
           find . -path '*bundle*' -type f -exec ls -la {} \; | tail -20
 
+      - name: Raw exe for auto-update
+        if: matrix.name == 'windows-x64'
+        shell: bash
+        run: |
+          SRC="$(find src-tauri/target -maxdepth 4 -type f -name 'sibnotify.exe' -not -path '*bundle*' | head -1)"
+          echo "src=$SRC"
+          ls -la "$SRC"
+          mkdir -p out
+          cp "$SRC" out/SibNotify.exe
+          ls -la out/SibNotify.exe
+
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
@@ -79,6 +90,7 @@ jobs:
         with:
           fail_on_unmatched_files: false
           files: |
+            out/SibNotify.exe
             src-tauri/target/**/bundle/nsis/*.exe
             src-tauri/target/**/bundle/msi/*.msi
             src-tauri/target/**/bundle/deb/*.deb

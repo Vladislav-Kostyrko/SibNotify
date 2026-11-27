@@ -265,6 +265,28 @@
   .ev .eb{font-size:.82em;color:var(--dim);margin-top:3px;line-height:1.35;}
   .ev.crit .en{color:#ff9d9d;}
   .evempty{font-size:.85em;color:var(--dim);padding:10px 0;}
+
+  /* ===== 0.16: мини-режим, неделя, превью письма, оффлайн ===== */
+  body.mini .grid{grid-template-columns:1fr!important;}
+  body.mini .blk{grid-column:span 12!important;}
+  body.mini .blk .bd{display:none;}
+  body.mini .blk.open .bd{display:block;}
+  body.mini .blk h3{cursor:pointer;}
+  #btn-mini.on{background:rgba(74,163,255,.18);border-color:rgba(74,163,255,.5);color:#9ccbff;}
+
+  .wk{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:6px;}
+  .wd{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:5px 3px;text-align:center;cursor:pointer;}
+  .wd.on{border-color:var(--accent);background:rgba(74,163,255,.12);}
+  .wd.today{border-color:rgba(74,163,255,.45);}
+  .wd .n{font-size:.68em;color:var(--dim);text-transform:uppercase;}
+  .wd .d{font-size:1em;font-weight:600;font-variant-numeric:tabular-nums;}
+  .wd .c{font-size:.7em;color:#ffcf72;min-height:12px;}
+  .wk-list{margin-top:4px;}
+
+  .pv{font-size:.8em;color:var(--dim);line-height:1.35;margin-top:5px;padding:6px 8px;
+    background:rgba(255,255,255,.04);border-radius:8px;white-space:pre-wrap;}
+  .offline{font-size:.72em;color:#ffcf72;background:rgba(255,176,32,.12);border-radius:6px;
+    padding:2px 6px;margin-bottom:5px;display:inline-block;}
 </style>
 </head>
 <body>
@@ -277,10 +299,13 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.15.2</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
+    <div class="iconbtn" id="btn-mini" title="Мини-режим">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="11" width="18" height="4" rx="1"/><rect x="3" y="18" width="18" height="3" rx="1"/></svg>
+    </div>
     <div class="iconbtn" id="btn-bell" title="Уведомления">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span class="bellcnt" id="bell-cnt"></span>
@@ -409,6 +434,12 @@
         <button class="btn" data-close="sh-settings">Отмена</button>
         <button class="btn primary" id="s-save">Сохранить</button>
       </div>
+      <div class="field">Версия <span id="s-ver">—</span></div>
+      <div id="s-upd" class="hint"></div>
+      <div class="btns">
+        <button class="btn" id="s-check">Проверить обновление</button>
+        <button class="btn primary" id="s-apply" style="display:none">Обновить</button>
+      </div>
       <div class="btns"><button class="btn danger" id="s-quit">Выход</button></div>
     </div>
   </div>
@@ -439,6 +470,28 @@
       invoke('drag_panel');
     });
   }
+  /* Ctrl+Z: история раскладки и действий */
+  const undoStack = [];
+  function pushUndo(label, snapshot, onUndo) {
+    undoStack.push({ label, blocks: JSON.stringify(snapshot), onUndo });
+    if (undoStack.length > 25) undoStack.shift();
+  }
+  async function undoLast() {
+    const a = undoStack.pop();
+    if (!a) return;
+    cfg.blocks = JSON.parse(a.blocks);
+    if (a.onUndo) { try { await a.onUndo(); } catch (e) {} }
+    await saveCfg();
+    render();
+    toastNow('Отменено', a.label, {});
+  }
+  window.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !document.querySelector('.sheet.on')) {
+      e.preventDefault();
+      undoLast();
+    }
+  });
+
   let cfg = null, dnd = false, hideTimer = null, audioCtx = null, editing = null, seenComments = 0, busy = false;
 
   /* любые падения JS — в лог, иначе «нажал и ничего не произошло» */
@@ -639,6 +692,7 @@
       amo:      { name: 'amoCRM',        ic: ic('amo'), need: ['wa'],  def: { h: 0, w: 0 } },
       weather:  { name: 'Погода',       ic: ic('weather'), need: [],      def: { h: 120, w: 0 } },
       ai:       { name: 'ИИ расход',    ic: ic('ai'), need: ['ai'],  def: { h: 150, w: 0 } },
+    week:     { name: 'Дедлайны недели', ic: ic('cal'), need: ['b24'], def: { h: 190, w: 0 } },
     clock:    { name: 'Часы',         ic: ic('clock'), need: [],      def: { h: 100, w: 0 } }
   };
 
@@ -703,6 +757,10 @@
     });
     g.querySelectorAll('[data-rz]').forEach(el => attachResize(el));
     g.querySelectorAll('.blk > h3').forEach(el => attachDrag(el));
+    if (cfg.mini) g.querySelectorAll('.blk > h3').forEach(h => h.addEventListener('click', e => {
+      if (e.target.closest('.bh')) return;
+      h.parentElement.classList.toggle('open');
+    }));
     g.querySelectorAll('[data-cfg]').forEach(el => el.onclick = e => { e.stopPropagation(); openCfg(+el.dataset.cfg); });
     g.querySelectorAll('[data-up]').forEach(el => el.onclick = e => { e.stopPropagation(); move(+el.dataset.up, -1); });
     g.querySelectorAll('[data-down]').forEach(el => el.onclick = e => { e.stopPropagation(); move(+el.dataset.down, 1); });
@@ -871,6 +929,44 @@
   }
 
   /* ---------- данные ---------- */
+  const CACHEK = b => 'sn-cache-' + b.type + '-' + (b.title || '');
+  function saveCache(b, html) {
+    try { localStorage.setItem(CACHEK(b), JSON.stringify({ h: html, t: Date.now() })); } catch (e) {}
+  }
+  function readCache(b) {
+    try {
+      const v = JSON.parse(localStorage.getItem(CACHEK(b)) || 'null');
+      if (!v || !v.h) return null;
+      const d = new Date(v.t);
+      return { h: v.h, t: d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) };
+    } catch (e) { return null; }
+  }
+
+  let updInfo = null;
+  async function checkUpd(silent) {
+    const box = $('s-upd');
+    try {
+      const v = await invoke('app_version');
+      if ($('s-ver')) $('s-ver').textContent = v || '';
+    } catch (e) {}
+    try {
+      const r = await invoke('check_update');
+      if (!r || !r.ok) { if (box && !silent) box.innerHTML = '<span class="bad">' + esc((r && r.error) || 'нет связи') + '</span>'; return; }
+      updInfo = r;
+      if (box) box.innerHTML = r.newer
+        ? 'Доступна версия <b>' + esc(r.latest) + '</b> (сейчас ' + esc(r.current) + ')'
+        : 'Версия свежая: ' + esc(r.current);
+      if ($('s-apply')) $('s-apply').style.display = r.newer ? '' : 'none';
+      if (r.newer && silent) {
+        pushEvent('update', 'Обновление', 'Доступна версия ' + r.latest, false);
+        const b = $('btn-bell');
+        if (b) b.title = 'Есть обновление ' + r.latest;
+      }
+    } catch (e) {
+      if (box && !silent) box.innerHTML = '<span class="bad">' + esc(String(e && e.message || e)) + '</span>';
+    }
+  }
+
   async function loadAll() {
     if (busy) { reloadQueued = true; return; }
     busy = true;
@@ -885,6 +981,7 @@
           else if (b.type === 'clock') clockBlock(b, body, i);
           else if (b.type === 'ai') await aiBlock(b, body, i);
           else if (b.type === 'tasks') await tasksBlock(b, body, i);
+          else if (b.type === 'week') await weekBlock(b, body, i);
           else if (b.type === 'comments') await commentsBlock(b, body, i);
           else if (b.type === 'chats') await chatsBlock(b, body, i);
           else if (b.type === 'mm') await mmBlock(b, body, i);
@@ -892,7 +989,13 @@
           else if (WEB_TYPES.indexOf(b.type) >= 0) await webBlock(b, body, i);
           else if (b.type === 'cal') await calBlock(b, body, i);
           else if (b.type === 'mail') await mailBlock(b, body, i);
-        } catch (e) { body.innerHTML = `<div class="err">${esc(e && e.message || e)}</div>`; }
+        } catch (e) {
+          const c = readCache(b);
+          body.innerHTML = c
+            ? `<div class="offline">данные на ${c.t}</div>` + c.h
+            : `<div class="err">${esc(e && e.message || e)}</div>`;
+        }
+        if (!body.querySelector('.offline')) saveCache(b, body.innerHTML);
         bodyCache[cKey(b)] = body.innerHTML;
       }
     } finally {
@@ -1157,6 +1260,38 @@
     if (b) b.title = dnd ? 'Не беспокоить включён (клик — выключить)' : 'Не беспокоить';
   }
 
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  async function weekBlock(b, body, i) {
+    const r = await invoke('b24_data');
+    if (!r) return;
+    if (!r.ok) { body.innerHTML = `<div class="err">${esc(shortErr(r.error))}</div>`; return; }
+    const list = (r.tasks || []).filter(t => t.deadline);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dow = (today.getDay() + 6) % 7;
+    const mon = new Date(today); mon.setDate(today.getDate() - dow);
+    const days = [...Array(7)].map((_, k) => { const d = new Date(mon); d.setDate(mon.getDate() + k); return d; });
+    const byDay = days.map(d => list.filter(t => {
+      const td = new Date(String(t.deadline).replace(' ', 'T'));
+      return !isNaN(td) && sameDay(td, d);
+    }));
+    const sel = b._sel === undefined ? dow : b._sel;
+    setCnt(i, byDay[sel].length);
+    body.innerHTML = `<div class="wk">${days.map((d, k) => `
+        <div class="wd${k === sel ? ' on' : ''}${sameDay(d, today) ? ' today' : ''}" data-day="${k}">
+          <div class="n">${d.toLocaleDateString('ru-RU', { weekday: 'short' })}</div>
+          <div class="d">${d.getDate()}</div>
+          <div class="c">${byDay[k].length ? byDay[k].length : ''}</div>
+        </div>`).join('')}</div>
+      <div class="wk-list">${byDay[sel].length ? byDay[sel].map(t => `
+        <div class="item" data-url="${esc(t.url)}">
+          <div class="t">${esc(t.title)}</div>
+          <div class="m">#${t.id} <span class="badge ${dCls(t.deadline)}">${fmtD(t.deadline)}</span></div>
+        </div>`).join('') : '<div class="empty">На этот день пусто</div>'}</div>`;
+    body.querySelectorAll('.wd').forEach(el => el.onclick = () => { b._sel = +el.dataset.day; weekBlock(b, body, i); });
+    body.querySelectorAll('.item[data-url]').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
+  }
+
   async function tasksBlock(b, body, i) {
     const r = await invoke('b24_data');
     if (!r) return;
@@ -1185,6 +1320,7 @@
     body.querySelectorAll('[data-done]').forEach(el => el.onclick = async e => {
       e.stopPropagation();
       el.textContent = '…';
+      pushUndo('задача закрыта — вернуть', blocks(), () => invoke('task_reopen', { id: el.dataset.done }));
       const res = await invoke('task_done', { id: el.dataset.done });
       if (res && res.ok) {
         el.classList.add('ok'); el.textContent = '✓';
@@ -1380,6 +1516,7 @@
       return `<div class="item"${t ? ` data-url="${esc(t)}"` : ''}>
         <div class="t">${m.seen ? '' : '<span class="badge">•</span> '}${esc(m.subject || '(без темы)')}</div>
         <div class="m">${esc(m.from)} · ${esc(m.date)}</div>
+        ${m.preview ? `<div class="pv" style="display:none">${esc(m.preview)}</div>` : ''}
       </div>`;
     }).join('') : '<div class="empty">Писем нет</div>';
     body.querySelectorAll('.item[data-url]').forEach(el => el.onclick = () => invoke('open_url', { url: el.dataset.url }));
@@ -1395,7 +1532,7 @@
     { k: 'other', n: 'Прочее',      ic: '▤', d: 'система, погода, часы' }
   ];
   const OF = {
-    crm:   [['tasks', 'Битрикс24'], ['comments', 'Битрикс24'], ['chats', 'Битрикс24']],
+    crm:   [['tasks', 'Битрикс24'], ['week', 'Дедлайны недели'], ['comments', 'Битрикс24'], ['chats', 'Битрикс24']],
     msg:   [['mm', 'Mattermost'], ['tg', 'Telegram'], ['wa', 'WhatsApp'], ['vk', 'ВКонтакте'], ['slack', 'Slack'], ['discord', 'Discord'], ['viber', 'Viber']],
     cal:   [['cal', 'Яндекс'], ['cal', 'Outlook'], ['cal', 'iCloud'], ['cal', 'Google']],
     mail:  [['mail', 'Yandex'], ['mail', 'Mail.ru'], ['mail', 'GMail'], ['mail', 'Outlook']],
@@ -1704,6 +1841,7 @@
 
   $('cfg-del').onclick = async () => {
     if (editing.mode !== 'edit') return;
+    pushUndo('блок удалён', blocks(), null);
     blocks().splice(editing.idx, 1);
     await saveCfg(); closeSheet('sh-cfg'); render();
   };
@@ -1796,6 +1934,8 @@
     dnd = !!cfg.dnd;
     applyDnd();
     loadCustomSound();
+    applyMini();
+    setTimeout(() => checkUpd(true), 4000);
       applyStyle();
       closeSheet('sh-settings');
       render();
@@ -1833,6 +1973,15 @@
     await saveCfg();
     applyStyle(); closeSheet('sh-settings');
     if (cfg.monitor_index) invoke('set_monitor', { idx: cfg.monitor_index });
+  };
+  if ($('s-check')) $('s-check').onclick = () => checkUpd(false);
+  if ($('s-apply')) $('s-apply').onclick = async () => {
+    if (!updInfo || !updInfo.url) return;
+    $('s-upd').innerHTML = 'Скачиваю…';
+    const r = await invoke('apply_update', { url: updInfo.url });
+    $('s-upd').innerHTML = (r && r.ok)
+      ? '<span class="ok">Скачано, перезапускаюсь…</span>'
+      : '<span class="bad">' + esc((r && r.error) || 'не получилось') + '</span>';
   };
   $('s-quit').onclick = () => invoke('quit_app');
 
