@@ -90,7 +90,7 @@ pub(crate) async fn b24_data(st: tauri::State<'_, AppState>) -> Result<Value, St
             "status": status,
             "priority": t.get("priority").and_then(|v| v.as_str()).unwrap_or(""),
             "group_id": t.get("groupId").and_then(|v| v.as_str()).unwrap_or("0"),
-            "url": format!("{}/company/tasks/task/view/{}/", portal, id),
+            "url": format!("{}/company/personal/user/{}/tasks/task/view/{}/", portal, cfg.user_id, id),
         }));
     }
 
@@ -165,7 +165,7 @@ pub(crate) async fn b24_data(st: tauri::State<'_, AppState>) -> Result<Value, St
                 "author_id": author,
                 "date": m.get("date").and_then(|x| x.as_str()).unwrap_or(""),
                 "text": text,
-                "task_url": format!("{}/company/tasks/task/view/{}/", portal, id),
+                "task_url": format!("{}/company/personal/user/{}/tasks/task/view/{}/", portal, cfg.user_id, id),
             }));
         }
     }
