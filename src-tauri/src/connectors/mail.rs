@@ -35,9 +35,35 @@ fn mail_blocking(host: &str, port: u64, user: &str, pass: &str, tls: bool, limit
             Err(e) => return json!({"ok": false, "error": format!("соединение: {e}"), "messages": [], "unread": 0}),
         }
     };
+    // Яндекс рвёт соединение при частых переподключениях — пробуем дважды
     let mut sess = match client.login(user, pass) {
         Ok(s) => s,
-        Err((e, _)) => return json!({"ok": false, "error": format!("вход: {e}"), "messages": [], "unread": 0}),
+        Err((e, _)) => {
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+            let tlsb2 = match TlsConnector::builder().build() {
+                Ok(t) => t,
+                Err(e2) => {
+                    return json!({"ok": false, "error": format!("TLS: {e2}"), "messages": [], "unread": 0})
+                }
+            };
+            let client2 = if tls {
+                imap::connect((host, port as u16), host, &tlsb2)
+            } else {
+                imap::connect_starttls((host, port as u16), host, &tlsb2)
+            };
+            let c2 = match client2 {
+                Ok(c) => c,
+                Err(e2) => {
+                    return json!({"ok": false, "error": format!("вход: {e}; повтор: {e2}"), "messages": [], "unread": 0})
+                }
+            };
+            match c2.login(user, pass) {
+                Ok(s2) => s2,
+                Err((e2, _)) => {
+                    return json!({"ok": false, "error": format!("вход: {e} (повтор: {e2})"), "messages": [], "unread": 0})
+                }
+            }
+        }
     };
     let _ = sess.select("INBOX");
     let mut out: Vec<Value> = Vec::new();
