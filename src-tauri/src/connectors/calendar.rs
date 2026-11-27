@@ -162,6 +162,7 @@ fn parse_ics(txt: &str) -> Vec<(String, i64, i64, String)> {
         let up = line.to_uppercase();
         if up.starts_with("LOCATION:")
             || up.starts_with("DESCRIPTION:")
+            || up.starts_with("CONFERENCE")
             || up.starts_with("X-GOOGLE-CONFERENCE:")
             || up.starts_with("URL:")
         {
@@ -212,28 +213,34 @@ fn ics_ts(v: &str) -> i64 {
 /// Вытаскиваем ссылку на видеовстречу из текста события.
 fn meet_url(text: &str) -> String {
     let hosts = [
-        "telemost.yandex.ru",
-        "telemost.yandex.com",
-        "vk.com/call",
+        "telemost",
+        "zoom.us",
         "meet.google.com",
-        "zoom.us/j/",
+        "jazz.sber",
+        "salutejazz",
+        "vk.com/call",
         "teams.microsoft.com/l/meetup",
-        "jazz.sber.ru",
-        "salutejazz.ru",
-        "kontur.ru/talk",
         "trueconf",
+        "kontur.ru/talk",
     ];
-    let mut out = String::new();
-    for tok in text.split(|c: char| c.is_whitespace() || c == '"' || c == '<' || c == '>') {
-        let t = tok.trim_matches(|c: char| c == ',' || c == ';' || c == ')' || c == '(' || c == '.');
+    // в ics переводы строк и разделители экранированы: \n \, \;
+    let clean = text
+        .replace("\\n", " ")
+        .replace("\\N", " ")
+        .replace("\\,", ",")
+        .replace("\\;", ";");
+    for tok in clean.split(|c: char| c.is_whitespace() || c == '"' || c == '<' || c == '>') {
+        let t = tok.trim_matches(|c: char| ",;)(.".contains(c));
         if !t.starts_with("http") {
             continue;
         }
-        let low = t.to_lowercase();
+        // обрезаем хвост, если ссылка склеилась со следующим словом
+        let cut = t.find(|c: char| c == '\\' || c == '#').unwrap_or(t.len());
+        let url = &t[..cut];
+        let low = url.to_lowercase();
         if hosts.iter().any(|h| low.contains(h)) {
-            out = t.to_string();
-            break;
+            return url.to_string();
         }
     }
-    out
+    String::new()
 }

@@ -301,7 +301,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.4</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.5</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -755,7 +755,9 @@
     // мгновенно показываем прошлые данные — иначе после ресайза/перестановки блоки на минуту пустеют
     list.forEach((b, i) => {
       const body = g.querySelector(`[data-body="${i}"]`);
-      if (body && bodyCache[cKey(b)]) body.innerHTML = bodyCache[cKey(b)];
+      if (!body) return;
+      if (bodyCache[cKey(b)]) body.innerHTML = bodyCache[cKey(b)];
+      else body.innerHTML = skel();   // сразу заглушки, чтобы блок не выглядел пустым
     });
     g.querySelectorAll('[data-rz]').forEach(el => attachResize(el));
     g.querySelectorAll('.blk > h3').forEach(el => attachDrag(el));
