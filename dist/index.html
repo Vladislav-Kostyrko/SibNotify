@@ -193,6 +193,52 @@
   .hint{font-size:0.77em;color:#6d7789;line-height:1.35;margin-top:6px;}
   .ok{color:#8ff0b6;}
   .bad{color:#ff9d9d;}
+
+  /* ===== 0.14: визуал ===== */
+  .i{width:13px;height:13px;flex:none;vertical-align:-2px;}
+  .blk h3 .ttl .i{opacity:.7;margin-right:3px;}
+  .tile .ic svg{width:20px;height:20px;display:block;margin:1px auto 0;}
+
+  /* микроанимации */
+  .iconbtn,.btn,.qa,.tile,.bh,.addblock,.item{transition:transform .13s cubic-bezier(.2,.9,.3,1.25),background .15s,border-color .15s,color .15s,box-shadow .15s;}
+  .iconbtn:active,.btn:active,.qa:active,.tile:active,.addblock:active{transform:scale(.96);}
+  .cnt.bump{animation:bump .34s cubic-bezier(.2,.9,.3,1.4);}
+  @keyframes bump{0%{transform:scale(1)}42%{transform:scale(1.16)}100%{transform:scale(1)}}
+  .cnt.hot{animation:pulseb 2.6s ease-in-out infinite;}
+  @keyframes pulseb{0%,100%{box-shadow:0 0 0 0 rgba(255,92,92,0)}50%{box-shadow:0 0 0 4px rgba(255,92,92,.13)}}
+
+  /* скелетоны при загрузке */
+  .sk{background:linear-gradient(90deg,rgba(255,255,255,.045) 25%,rgba(255,255,255,.10) 37%,rgba(255,255,255,.045) 63%);
+      background-size:400% 100%;animation:sh 1.5s ease infinite;border-radius:6px;height:10px;margin:7px 0;}
+  .sk.s2{width:72%} .sk.s3{width:88%}
+  @keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
+
+  /* глубина */
+  .panel{background:radial-gradient(120% 70% at 50% -10%,rgba(255,255,255,.07),transparent 62%),var(--bg);}
+  .blk{box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 2px 4px rgba(0,0,0,.18),0 10px 24px rgba(0,0,0,.22);}
+  .blk:hover{border-color:transparent;
+    background-image:linear-gradient(var(--bg2),var(--bg2)),linear-gradient(135deg,rgba(74,163,255,.55),rgba(255,255,255,.05) 45%,rgba(74,163,255,.18));
+    background-origin:border-box;background-clip:padding-box,border-box;}
+
+  /* цветовой код блоков */
+  .blk::after{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2.5px;border-radius:3px;
+    background:var(--tone,transparent);opacity:.85;pointer-events:none;}
+  body.right .blk::after{left:auto;right:0;}
+  body.no-tone .blk::after{display:none;}
+
+  /* скроллбары */
+  .grid,.blk .bd{scrollbar-width:thin;scrollbar-color:transparent transparent;}
+  .grid:hover,.blk .bd:hover{scrollbar-color:rgba(255,255,255,.16) transparent;}
+  .grid::-webkit-scrollbar-thumb,.blk .bd::-webkit-scrollbar-thumb{background:transparent;}
+  .grid:hover::-webkit-scrollbar-thumb,.blk .bd:hover::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);}
+
+  /* появление панели и блоков */
+  body.left .panel.fresh{animation:slideL .26s cubic-bezier(.16,1,.3,1);}
+  body.right .panel.fresh{animation:slideR .26s cubic-bezier(.16,1,.3,1);}
+  @keyframes slideL{from{transform:translateX(-14px);opacity:.6}to{transform:none;opacity:1}}
+  @keyframes slideR{from{transform:translateX(14px);opacity:.6}to{transform:none;opacity:1}}
+  .grid.fresh .blk{animation:rise .34s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--i,0) * 38ms);}
+  @keyframes rise{from{transform:translateY(9px) scale(.995);opacity:0}to{transform:none;opacity:1}}
 </style>
 </head>
 <body>
@@ -205,7 +251,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.11.0</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.14.1</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -298,6 +344,7 @@
       </div>
       <div class="field">Акцентный цвет<input id="s-accent" type="color" style="height:32px;padding:2px" /></div>
       <label class="chk"><input type="checkbox" id="s-blur" /> Размытие фона (acrylic)</label>
+      <label class="chk"><input type="checkbox" id="s-tone" /> Цветные полоски у блоков</label>
       <label class="chk"><input type="checkbox" id="s-sound" /> Звук при новых событиях</label>
       <label class="chk"><input type="checkbox" id="s-toast" /> Тост-уведомления Windows</label>
       <label class="chk"><input type="checkbox" id="s-autostart" /> Запускать при входе в Windows</label>
@@ -406,26 +453,59 @@
     light:    { bg: '245,246,250', card: '255,255,255', txt: '#1b1f28', dim: '#667085' }
   };
 
+
+  /* иконки: один набор (контуры 24x24), вместо эмодзи */
+  const IC = {
+    system: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    tasks: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    comments: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    chats: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    mm: '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+    tg: '<path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
+    cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>',
+    weather: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    ai: '<path d="M12 3l1.8 4.4L18 9l-4.2 1.6L12 15l-1.8-4.4L6 9l4.2-1.6z"/><path d="M18.5 15l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+    wa: '<path d="M21 11.5a8.4 8.4 0 0 1-12.6 7.4L3 21l2.2-5.3A8.4 8.4 0 1 1 21 11.5z"/>',
+    vk: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/>',
+    slack: '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+    discord: '<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M7 12h.01M17 12h.01"/>',
+    viber: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+    tilda: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+    onec: '<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+    amo: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
+    dot: '<circle cx="12" cy="12" r="3"/>',
+    bell: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'
+  };
+  const ic = n => '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + (IC[n] || IC.dot) + '</svg>';
+
+  /* цветовой код типов */
+  const TONES = { system:'#4fd1a5', tasks:'#4aa3ff', comments:'#7ec3ff', chats:'#8b7bff', mm:'#a78bfa',
+                  tg:'#59c3ff', cal:'#ffd166', mail:'#ff9f45', weather:'#59c3ff', ai:'#b98bff', clock:'#9aa6b8' };
+  const toneOf = t => TONES[t] || 'rgba(255,255,255,.18)';
+
   const TYPES = {
-    system:   { name: 'Система',      ic: '▤', need: [],      def: { h: 190, w: 0 } },
-    tasks:    { name: 'Задачи Б24',   ic: '☑', need: ['b24'], def: { h: 220, w: 0 } },
-    comments: { name: 'Комментарии',  ic: '💬', need: ['b24'], def: { h: 180, w: 0 } },
-    chats:    { name: 'Чаты Б24',     ic: '✉', need: ['b24'], def: { h: 190, w: 0 } },
-    mm:       { name: 'Mattermost',   ic: '◉', need: ['mm'],  def: { h: 190, w: 0 } },
-    tg:       { name: 'Telegram',     ic: '✈', need: ['tg'],  def: { h: 170, w: 0 } },
-    cal:      { name: 'Календарь',    ic: '▦', need: ['cal'], def: { h: 200, w: 0 } },
-    mail:     { name: 'Почта',        ic: '✉', need: ['mail'],def: { h: 180, w: 0 } },
-      wa:       { name: 'WhatsApp',      ic: '💬', need: ['wa'],  def: { h: 0, w: 0 } },
-      vk:       { name: 'ВКонтакте',     ic: 'Ⓥ', need: ['vk'],  def: { h: 0, w: 0 } },
-      slack:    { name: 'Slack',         ic: '#', need: ['wa'],  def: { h: 0, w: 0 } },
-      discord:  { name: 'Discord',       ic: '◍', need: ['wa'],  def: { h: 0, w: 0 } },
-      viber:    { name: 'Viber',         ic: '📞', need: ['wa'],  def: { h: 0, w: 0 } },
-      tilda:    { name: 'Tilda',         ic: '◨', need: ['wa'],  def: { h: 0, w: 0 } },
-      onec:     { name: '1С',            ic: '▣', need: ['wa'],  def: { h: 0, w: 0 } },
-      amo:      { name: 'amoCRM',        ic: '●', need: ['wa'],  def: { h: 0, w: 0 } },
-      weather:  { name: 'Погода',       ic: '☀', need: [],      def: { h: 120, w: 0 } },
-      ai:       { name: 'ИИ расход',    ic: '✦', need: ['ai'],  def: { h: 150, w: 0 } },
-    clock:    { name: 'Часы',         ic: '◷', need: [],      def: { h: 100, w: 0 } }
+    system:   { name: 'Система',      ic: ic('system'), need: [],      def: { h: 190, w: 0 } },
+    tasks:    { name: 'Задачи Б24',   ic: ic('tasks'), need: ['b24'], def: { h: 220, w: 0 } },
+    comments: { name: 'Комментарии',  ic: ic('comments'), need: ['b24'], def: { h: 180, w: 0 } },
+    chats:    { name: 'Чаты Б24',     ic: ic('chats'), need: ['b24'], def: { h: 190, w: 0 } },
+    mm:       { name: 'Mattermost',   ic: ic('mm'), need: ['mm'],  def: { h: 190, w: 0 } },
+    tg:       { name: 'Telegram',     ic: ic('tg'), need: ['tg'],  def: { h: 170, w: 0 } },
+    cal:      { name: 'Календарь',    ic: ic('cal'), need: ['cal'], def: { h: 200, w: 0 } },
+    mail:     { name: 'Почта',        ic: ic('mail'), need: ['mail'],def: { h: 180, w: 0 } },
+      wa:       { name: 'WhatsApp',      ic: ic('wa'), need: ['wa'],  def: { h: 0, w: 0 } },
+      vk:       { name: 'ВКонтакте',     ic: ic('vk'), need: ['vk'],  def: { h: 0, w: 0 } },
+      slack:    { name: 'Slack',         ic: ic('slack'), need: ['wa'],  def: { h: 0, w: 0 } },
+      discord:  { name: 'Discord',       ic: ic('discord'), need: ['wa'],  def: { h: 0, w: 0 } },
+      viber:    { name: 'Viber',         ic: ic('viber'), need: ['wa'],  def: { h: 0, w: 0 } },
+      tilda:    { name: 'Tilda',         ic: ic('tilda'), need: ['wa'],  def: { h: 0, w: 0 } },
+      onec:     { name: '1С',            ic: ic('onec'), need: ['wa'],  def: { h: 0, w: 0 } },
+      amo:      { name: 'amoCRM',        ic: ic('amo'), need: ['wa'],  def: { h: 0, w: 0 } },
+      weather:  { name: 'Погода',       ic: ic('weather'), need: [],      def: { h: 120, w: 0 } },
+      ai:       { name: 'ИИ расход',    ic: ic('ai'), need: ['ai'],  def: { h: 150, w: 0 } },
+    clock:    { name: 'Часы',         ic: ic('clock'), need: [],      def: { h: 100, w: 0 } }
   };
 
   const blocks = () => (cfg && cfg.blocks) || [];
@@ -444,7 +524,8 @@
     const p = $('panel');
     if (p) p.style.backdropFilter = cfg.blur === false ? 'none' : 'blur(24px) saturate(140%)';
     const side = cfg.panel_side === 'right' ? 'right' : 'left';
-    document.body.className = 'panel ' + side + ((cfg.panel_radius === 0) ? ' flush' : '');
+    document.body.className = 'panel ' + side + ((cfg.panel_radius === 0) ? ' flush' : '')
+      + (cfg.block_colors === false ? ' no-tone' : '');
   }
 
   /* ---------- рендер ---------- */
@@ -461,7 +542,7 @@
     });
     g.innerHTML = (list.length ? list.map((b, i) => `
       <div class="blk${b.h ? '' : ' auto'}" data-i="${i}" data-type="${b.type}"
-           style="${b.h ? `height:${b.h}px;` : ''}${blkW(b, g.clientWidth)}">
+           style="${b.h ? `height:${b.h}px;` : ''}${blkW(b, g.clientWidth)}--tone:${toneOf(b.type)};--i:${i};">
         <h3><span class="grip" title="Перетащи за шапку, чтобы поменять порядок">⠿</span><span class="ttl">${(TYPES[b.type] || {}).ic || '•'} ${esc(b.title || (TYPES[b.type] || {}).name || b.type)}</span>
           <span class="cnt" data-cnt="${i}">0</span>
           <span class="bh" data-cfg="${i}" title="Настроить">⚙</span>
@@ -659,6 +740,7 @@
       for (const [i, b] of blocks().entries()) {
         const body = document.querySelector(`[data-body="${i}"]`);
         if (!body) continue;
+        if (!body.innerHTML.trim()) body.innerHTML = skel();
         try {
           if (b.type === 'system') await sysBlock(b, body, i);
           else if (b.type === 'weather') await weatherBlock(b, body, i);
@@ -683,7 +765,22 @@
 
   function setCnt(i, n, hot) {
     const el = document.querySelector(`[data-cnt="${i}"]`);
-    if (el) { el.textContent = n; el.className = 'cnt' + (hot ? ' hot' : ''); }
+    if (!el) return;
+    const changed = String(el.textContent) !== String(n);
+    el.textContent = n;
+    el.className = 'cnt' + (hot ? ' hot' : '') + (changed ? ' bump' : '');
+    if (changed) setTimeout(() => el.classList.remove('bump'), 400);
+  }
+
+  /* скелетон, пока данных ещё нет */
+  const skel = () => '<div class="sk"></div><div class="sk s2"></div><div class="sk s3"></div>';
+
+  /* плавное появление: панель целиком + блоки лесенкой */
+  function freshPanel() {
+    const p = $('panel'), g = $('grid');
+    if (p) { p.classList.remove('fresh'); void p.offsetWidth; p.classList.add('fresh'); }
+    if (g) { g.classList.remove('fresh'); void g.offsetWidth; g.classList.add('fresh'); }
+    setTimeout(() => { if (p) p.classList.remove('fresh'); if (g) g.classList.remove('fresh'); }, 900);
   }
 
   async function sysBlock(b, body, i) {
@@ -1470,6 +1567,7 @@
     $('s-theme').value = cfg.theme || 'dark';
     $('s-accent').value = cfg.accent || '#4aa3ff';
     $('s-blur').checked = cfg.blur !== false;
+    if ($('s-tone')) $('s-tone').checked = cfg.block_colors !== false;
     $('s-sound').checked = !!cfg.sound;
     if ($('s-vip')) $('s-vip').value = cfg.vip || '';
     $('s-toast').checked = cfg.toast !== false;
@@ -1528,6 +1626,7 @@
     cfg.theme = $('s-theme').value;
     cfg.accent = $('s-accent').value;
     cfg.blur = $('s-blur').checked;
+    if ($('s-tone')) cfg.block_colors = $('s-tone').checked;
     cfg.sound = $('s-sound').checked;
     if ($('s-vip')) cfg.vip = $('s-vip').value.trim();
     cfg.toast = $('s-toast').checked;
@@ -1596,7 +1695,11 @@
     tickClock(); setInterval(tickClock, 1000);
     try {
       render();
-      diag('render ok, blocks=' + blocks().length);
+      diag('render ok, blocks=' + blocks().length
+        + ' | w=' + window.innerWidth + ' h=' + window.innerHeight
+        + ' dpr=' + window.devicePixelRatio
+        + ' fs=' + getComputedStyle(document.body).fontSize
+        + ' cfgfs=' + (cfg.font_size === undefined ? 'нет' : cfg.font_size));
     } catch (e) {
       diag('render FAIL: ' + (e && (e.stack || e.message || e)));
       throw e;
@@ -1607,7 +1710,7 @@
     setInterval(loadWx, 900000);
     try {
       if (T && T.event) {
-        T.event.listen('panel_shown', () => { if (!document.querySelector('.sheet.on')) loadAll(); });
+        T.event.listen('panel_shown', () => { freshPanel(); if (!document.querySelector('.sheet.on')) loadAll(); });
         T.event.listen('blocked', e => { if (e.payload) invoke('hide_panel'); });
         T.event.listen('refresh', () => { busy = false; render(); });
         T.event.listen('geom', e => {

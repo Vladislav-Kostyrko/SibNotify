@@ -69,10 +69,44 @@ pub struct Config {
     /// тост-уведомления Windows
     #[serde(default = "d_true")]
     pub(crate) toast: bool,
+    /// поля внешнего вида: фронт читает их из get_config, поэтому они обязаны
+    /// быть в структуре — иначе после перезапуска всё сбрасывается к дефолтам
+    #[serde(default = "d_font_size")]
+    pub(crate) font_size: u32,
+    #[serde(default = "d_accent")]
+    pub(crate) accent: String,
+    #[serde(default = "d_theme")]
+    pub(crate) theme: String,
+    #[serde(default = "d_radius")]
+    pub(crate) radius: u32,
+    #[serde(default = "d_panel_radius")]
+    pub(crate) panel_radius: u32,
+    #[serde(default = "d_card_opacity")]
+    pub(crate) card_opacity: u8,
+    #[serde(default = "d_true")]
+    pub(crate) block_colors: bool,
+    #[serde(default = "d_true")]
+    pub(crate) blur: bool,
+    #[serde(default)]
+    pub(crate) vip: String,
+    #[serde(default)]
+    pub(crate) dnd: bool,
 
 }
 
 pub(crate) fn d_true() -> bool { true }
+
+pub(crate) fn d_font_size() -> u32 { 15 }
+
+pub(crate) fn d_accent() -> String { "#4aa3ff".to_string() }
+
+pub(crate) fn d_theme() -> String { "dark".to_string() }
+
+pub(crate) fn d_radius() -> u32 { 13 }
+
+pub(crate) fn d_panel_radius() -> u32 { 16 }
+
+pub(crate) fn d_card_opacity() -> u8 { 92 }
 
 pub(crate) fn d_panel_h() -> u32 { 88 }
 
@@ -129,6 +163,16 @@ impl Default for Config {
             hotkey: d_hotkey(),
             strip_enabled: true,
             toast: true,
+            font_size: d_font_size(),
+            accent: d_accent(),
+            theme: d_theme(),
+            radius: d_radius(),
+            panel_radius: d_panel_radius(),
+            card_opacity: d_card_opacity(),
+            block_colors: true,
+            blur: true,
+            vip: String::new(),
+            dnd: false,
         }
     }
 }
