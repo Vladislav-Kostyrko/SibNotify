@@ -43,6 +43,12 @@ pub async fn cal_data(portal: &str, webhook: &str, user_id: i64, from: i64, to: 
                             continue;
                         }
                         let df = e.get("DATE_FROM").and_then(|x| x.as_str()).unwrap_or("");
+                        let meet = meet_url(&format!(
+                            "{} {} {}",
+                            e.get("DESCRIPTION").and_then(|x| x.as_str()).unwrap_or(""),
+                            e.get("LOCATION").and_then(|x| x.as_str()).unwrap_or(""),
+                            e.get("URL").and_then(|x| x.as_str()).unwrap_or("")
+                        ));
                         let dt = e.get("DATE_TO").and_then(|x| x.as_str()).unwrap_or("");
                         let id = e.get("ID").and_then(|x| x.as_str()).unwrap_or("0");
                         events.push(json!({
@@ -57,6 +63,7 @@ pub async fn cal_data(portal: &str, webhook: &str, user_id: i64, from: i64, to: 
                                 if p.len() == 3 { format!("{}-{}-{}", p[2], p[1], p[0]) } else { d.to_string() }
                             }).unwrap_or_default(),
                             "url": format!("{}/company/calendar/?EVENT_ID={}", portal, id),
+                            "meet": meet,
                             "_sort": from_ts,
                         }));
                     }
@@ -88,7 +95,7 @@ pub async fn cal_data(portal: &str, webhook: &str, user_id: i64, from: i64, to: 
                 continue;
             }
         };
-        for (title, start, end) in parse_ics(&txt) {
+        for (title, start, end, meet) in parse_ics(&txt) {
             // событие попадает в окно, только если ещё не закончилось и не началось после него
             if start >= horizon || end <= now {
                 continue;
@@ -105,6 +112,7 @@ pub async fn cal_data(portal: &str, webhook: &str, user_id: i64, from: i64, to: 
                 "kind": "ics",
                 "date": ts_date(start),
                 "url": "",
+                "meet": meet,
                 "_sort": start,
             }));
         }
@@ -118,12 +126,13 @@ pub async fn cal_data(portal: &str, webhook: &str, user_id: i64, from: i64, to: 
     json!({"ok": true, "events": events, "count": events.len(), "warn": skipped.join("; "), "error": Value::Null})
 }
 
-fn parse_ics(txt: &str) -> Vec<(String, i64, i64)> {
+fn parse_ics(txt: &str) -> Vec<(String, i64, i64, String)> {
     let unfolded = txt.replace("\r\n ", "").replace("\n ", "");
     let mut out = Vec::new();
     let mut title = String::new();
     let mut start = 0i64;
     let mut end = 0i64;
+    let mut meet = String::new();
     let mut in_event = false;
     for line in unfolded.lines() {
         let line = line.trim();
@@ -132,6 +141,7 @@ fn parse_ics(txt: &str) -> Vec<(String, i64, i64)> {
             title.clear();
             start = 0;
             end = 0;
+            meet.clear();
             continue;
         }
         if line == "END:VEVENT" {
@@ -140,7 +150,7 @@ fn parse_ics(txt: &str) -> Vec<(String, i64, i64)> {
                     end = start + 3600;
                 }
                 if !title.is_empty() {
-                    out.push((title.clone(), start, end));
+                    out.push((title.clone(), start, end, meet.clone()));
                 }
             }
             in_event = false;
@@ -148,6 +158,20 @@ fn parse_ics(txt: &str) -> Vec<(String, i64, i64)> {
         }
         if !in_event {
             continue;
+        }
+        let up = line.to_uppercase();
+        if up.starts_with("LOCATION:")
+            || up.starts_with("DESCRIPTION:")
+            || up.starts_with("X-GOOGLE-CONFERENCE:")
+            || up.starts_with("URL:")
+        {
+            let val = line.splitn(2, ':').nth(1).unwrap_or("");
+            if meet.is_empty() {
+                let u = meet_url(val);
+                if !u.is_empty() {
+                    meet = u;
+                }
+            }
         }
         if let Some(v) = line.strip_prefix("SUMMARY:") {
             title = v.replace("\\,", ",").replace("\\n", " ").to_string();
@@ -183,4 +207,33 @@ fn ics_ts(v: &str) -> i64 {
     };
     // приблизительный перевод в unix (UTC) — для сортировки и окна достаточно
     days_from_civil(y, m, d) * 86400 + hh * 3600 + mm * 60 + ss
+}
+
+/// Вытаскиваем ссылку на видеовстречу из текста события.
+fn meet_url(text: &str) -> String {
+    let hosts = [
+        "telemost.yandex.ru",
+        "telemost.yandex.com",
+        "vk.com/call",
+        "meet.google.com",
+        "zoom.us/j/",
+        "teams.microsoft.com/l/meetup",
+        "jazz.sber.ru",
+        "salutejazz.ru",
+        "kontur.ru/talk",
+        "trueconf",
+    ];
+    let mut out = String::new();
+    for tok in text.split(|c: char| c.is_whitespace() || c == '"' || c == '<' || c == '>') {
+        let t = tok.trim_matches(|c: char| c == ',' || c == ';' || c == ')' || c == '(' || c == '.');
+        if !t.starts_with("http") {
+            continue;
+        }
+        let low = t.to_lowercase();
+        if hosts.iter().any(|h| low.contains(h)) {
+            out = t.to_string();
+            break;
+        }
+    }
+    out
 }

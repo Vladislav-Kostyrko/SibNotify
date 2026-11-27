@@ -1,5 +1,8 @@
 use crate::connectors;
 use crate::state::AppState;
+
+/// в сети Влада open-meteo и telegram напрямую недоступны — ходим через свой nginx
+const SN_PROXY: &str = "https://vladkostyrko20.fvds.ru/sn-a0e294d7dfd12ace6dc46267";
 use tauri::Manager;
 use serde_json::Value;
 

@@ -51,6 +51,7 @@ pub async fn mm_data(url: &str, token: &str, limit: usize) -> Value {
 
     // кандидаты: канал, непрочитанное, последний просмотр
     struct Cand {
+        team: String,
         name: String,
         cname: String,
         cid: String,
@@ -63,7 +64,7 @@ pub async fn mm_data(url: &str, token: &str, limit: usize) -> Value {
 
     for t in teams.iter().take(2) {
         let tid = t.get("id").and_then(|v| v.as_str()).unwrap_or("");
-        let _tname = t.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let tname = t.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
         if tid.is_empty() {
             continue;
         }
@@ -138,6 +139,7 @@ pub async fn mm_data(url: &str, token: &str, limit: usize) -> Value {
                     }
                 }
                 cands.push(Cand {
+                    team: tname.clone(),
                     name,
                     cname,
                     cid,
@@ -221,7 +223,7 @@ pub async fn mm_data(url: &str, token: &str, limit: usize) -> Value {
                 "mentions": cand.mentions,
                 "msgs": msgs,
                 "text": "",
-                "url": format!("{}/ptbr/channels/{}", base, cand.cname),
+                "url": format!("{}/{}/channels/{}", base, if cand.team.is_empty() { "ptbr" } else { cand.team.as_str() }, cand.cname),
             }),
         ));
     }

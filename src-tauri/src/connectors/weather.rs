@@ -5,6 +5,12 @@ use serde_json::{json, Value};
 
 pub async fn weather(lat: f64, lon: f64, city: &str, proxy: &str, source: &str) -> Value {
     let src = source.trim();
+    // пустой прокси = ходим через наш nginx (open-meteo из корпоративной сети недоступен)
+    let proxy = if proxy.trim().is_empty() {
+        "https://vladkostyrko20.fvds.ru/sn-a0e294d7dfd12ace6dc46267"
+    } else {
+        proxy
+    };
     if src != "open-meteo" {
         let g = weather_gis(lat, lon, city).await;
         if g.get("ok").and_then(|x| x.as_bool()) == Some(true) {

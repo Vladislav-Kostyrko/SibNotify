@@ -287,6 +287,8 @@
     background:rgba(255,255,255,.04);border-radius:8px;white-space:pre-wrap;}
   .offline{font-size:.72em;color:#ffcf72;background:rgba(255,176,32,.12);border-radius:6px;
     padding:2px 6px;margin-bottom:5px;display:inline-block;}
+  .meet{font-size:.92em;padding:1px 6px;border-radius:20px;background:rgba(74,163,255,.16);color:#9ccbff;cursor:pointer;}
+  .meet:hover{background:var(--accent);color:#06101d;}
 </style>
 </head>
 <body>
@@ -299,7 +301,7 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.3</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.16.4</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
@@ -1463,12 +1465,17 @@
     for (const e of list) {
       const d = e.date || String(e.start || '').slice(0, 10);
       if (d && d !== lastDate) { html += `<div class="cdate">${fmtDateLabel(d)}</div>`; lastDate = d; }
+      const meet = e.meet || '';
       html += `<div class="item" data-url="${esc(e.url || '')}">
         <div class="t"><span class="ctime">${esc(e.start_hhmm || '')}</span>${esc(e.title)}</div>
-        ${e.end_hhmm ? `<div class="m">до ${esc(e.end_hhmm)}${e.kind === 'ics' ? ' · внешний' : ''}</div>` : (e.kind === 'ics' ? '<div class="m">внешний</div>' : '')}
+        <div class="m">${e.end_hhmm ? `до ${esc(e.end_hhmm)}` : ''}${e.kind === 'ics' ? ' · внешний' : ''}${meet ? ` <span class="meet" data-meet="${esc(meet)}" title="Открыть встречу">▶ Телемост</span>` : ''}</div>
       </div>`;
     }
     body.innerHTML = html;
+    body.querySelectorAll('.meet').forEach(el => el.onclick = e => {
+      e.stopPropagation();
+      invoke('open_url', { url: el.dataset.meet });
+    });
     body.querySelectorAll('.item').forEach(el => { if (el.dataset.url) el.onclick = () => invoke('open_url', { url: el.dataset.url }); });
   }
 
@@ -1931,11 +1938,9 @@
       $('s-cfg-status').textContent = 'Загружено, перечитываю…';
       cfg = (await invoke('get_config')) || {};
       if (!cfg.blocks) cfg.blocks = [];
-    dnd = !!cfg.dnd;
-    applyDnd();
-    loadCustomSound();
-    applyMini();
-    setTimeout(() => checkUpd(true), 4000);
+      dnd = !!cfg.dnd;
+      applyDnd();
+      applyMini();
       applyStyle();
       closeSheet('sh-settings');
       render();
@@ -1993,6 +1998,32 @@
   };
   $('btn-refresh').onclick = () => { busy = false; render(); };
 
+  const applyMini = () => {
+    document.body.classList.toggle('mini', !!cfg.mini);
+    const b = $('btn-mini');
+    if (b) b.classList.toggle('on', !!cfg.mini);
+  };
+  $('btn-mini').onclick = async () => {
+    cfg.mini = !cfg.mini;
+    applyMini();
+    await saveCfg();
+    render();
+  };
+  $('btn-bell').onclick = () => { drawEvents(); openSheet('sh-events'); };
+  if ($('ev-clear')) $('ev-clear').onclick = () => {
+    events = [];
+    const c = $('bell-cnt');
+    if (c) { c.classList.remove('on'); c.textContent = ''; }
+    drawEvents();
+  };
+  $('btn-dnd').onclick = async () => {
+    cfg.dnd = !cfg.dnd;
+    dnd = !!cfg.dnd;
+    applyDnd();
+    await saveCfg();
+    if (dnd) invoke('hide_panel'); else loadAll();
+  };
+
   // быстрые кнопки внизу убраны — остались горячие клавиши и контекст блоков
   $('nt-save').onclick = async () => {
     const title = $('nt-title').value.trim();
@@ -2039,6 +2070,11 @@
       throw e;
     }
     if (!cfg.blocks) cfg.blocks = [];
+    dnd = !!cfg.dnd;
+    applyDnd();
+    applyMini();
+    loadCustomSound();
+    setTimeout(() => checkUpd(true), 5000);
     applyStyle();
     tickClock(); setInterval(tickClock, 1000);
     try {
