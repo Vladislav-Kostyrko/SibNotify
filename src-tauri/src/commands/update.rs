@@ -37,19 +37,26 @@ pub(crate) async fn check_update() -> Result<Value, String> {
     }
     let v: Value = resp.json().await.map_err(|e| e.to_string())?;
     let tag = v.get("tag_name").and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let asset = v
+    // нужен именно голый SibNotify.exe, а не установщик *-setup.exe
+    let assets = v
         .get("assets")
         .and_then(|a| a.as_array())
-        .and_then(|a| {
-            a.iter()
-                .find(|x| {
-                    x.get("name")
-                        .and_then(|n| n.as_str())
-                        .map(|n| n.to_ascii_lowercase().ends_with(".exe"))
-                        .unwrap_or(false)
+        .cloned()
+        .unwrap_or_default();
+    let pick = |name: &str| assets.iter().find(|x| {
+        x.get("name").and_then(|n| n.as_str()).map(|n| n == name).unwrap_or(false)
+    }).cloned();
+    let asset = pick("SibNotify.exe").or_else(|| {
+        assets.iter().find(|x| {
+            x.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| {
+                    let l = n.to_ascii_lowercase();
+                    l.ends_with(".exe") && !l.contains("setup") && !l.contains("install")
                 })
-                .cloned()
-        });
+                .unwrap_or(false)
+        }).cloned()
+    });
     let url = asset
         .as_ref()
         .and_then(|a| a.get("browser_download_url"))
