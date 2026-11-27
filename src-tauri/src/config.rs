@@ -85,6 +85,8 @@ pub struct Config {
     pub(crate) card_opacity: u8,
     #[serde(default = "d_true")]
     pub(crate) block_colors: bool,
+    #[serde(default = "d_sound_vol")]
+    pub(crate) sound_vol: u32,
     #[serde(default = "d_true")]
     pub(crate) blur: bool,
     #[serde(default)]
@@ -107,6 +109,8 @@ pub(crate) fn d_radius() -> u32 { 13 }
 pub(crate) fn d_panel_radius() -> u32 { 16 }
 
 pub(crate) fn d_card_opacity() -> u8 { 92 }
+
+pub(crate) fn d_sound_vol() -> u32 { 70 }
 
 pub(crate) fn d_panel_h() -> u32 { 88 }
 
@@ -170,6 +174,7 @@ impl Default for Config {
             panel_radius: d_panel_radius(),
             card_opacity: d_card_opacity(),
             block_colors: true,
+            sound_vol: d_sound_vol(),
             blur: true,
             vip: String::new(),
             dnd: false,
