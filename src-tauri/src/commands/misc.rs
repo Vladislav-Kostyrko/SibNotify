@@ -131,3 +131,21 @@ pub(crate) fn js_log(text: String) {
         let _ = writeln!(f, "{text}");
     }
 }
+
+/// Свой звук уведомления: файл sound.mp3/wav/ogg рядом с config.json.
+/// Возвращает байты, фронт играет их как Blob — без asset-протокола.
+#[tauri::command]
+pub(crate) fn sound_file(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("нет папки настроек: {e}"))?;
+    for name in ["sound.mp3", "sound.wav", "sound.ogg", "sound.m4a"] {
+        let p = dir.join(name);
+        if p.exists() {
+            return std::fs::read(&p).map_err(|e| format!("не прочитал {}: {e}", name));
+        }
+    }
+    Err(String::new())
+}

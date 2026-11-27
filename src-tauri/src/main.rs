@@ -174,7 +174,8 @@ fn main() {
             mail,
             open_url,
             quit_app,
-            js_log
+            js_log,
+            sound_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

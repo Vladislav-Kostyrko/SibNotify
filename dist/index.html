@@ -251,6 +251,20 @@
   .srow span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .srow b{flex:none;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .blk .bd{overflow-x:hidden;}
+
+  /* ===== 0.15: колокольчик и DND ===== */
+  #btn-bell{position:relative;}
+  .bellcnt{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;border-radius:9px;background:#ff5c5c;color:#fff;
+    font-size:9px;line-height:15px;text-align:center;padding:0 3px;display:none;font-weight:600;}
+  .bellcnt.on{display:block;}
+  #btn-dnd.on{background:rgba(255,176,32,.18);border-color:rgba(255,176,32,.5);color:#ffcf72;}
+  .ev{padding:8px 4px;border-bottom:1px dashed rgba(255,255,255,.07);}
+  .ev .eh{display:flex;gap:8px;align-items:baseline;}
+  .ev .en{font-size:.92em;}
+  .ev .et{margin-left:auto;font-size:.75em;color:var(--dim);font-variant-numeric:tabular-nums;}
+  .ev .eb{font-size:.82em;color:var(--dim);margin-top:3px;line-height:1.35;}
+  .ev.crit .en{color:#ff9d9d;}
+  .evempty{font-size:.85em;color:var(--dim);padding:10px 0;}
 </style>
 </head>
 <body>
@@ -263,10 +277,17 @@
 <div id="panel" class="panel" style="display:none">
   <header>
     <div>
-      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.14.6</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
+      <div class="brand">SIBTRANS <span style="opacity:.5;letter-spacing:0">v0.15.1</span> <span id="wx" style="font-size:0.81em;letter-spacing:0"></span></div>
       <div class="sub" id="date"></div>
     </div>
     <div class="clock" id="clock">--:--</div>
+    <div class="iconbtn" id="btn-bell" title="Уведомления">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <span class="bellcnt" id="bell-cnt"></span>
+    </div>
+    <div class="iconbtn" id="btn-dnd" title="Не беспокоить">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </div>
     <div class="iconbtn" id="btn-side" title="Перенести на другую сторону">⇄</div>
     <div class="iconbtn" id="btn-refresh" title="Обновить">⟳</div>
     <div class="iconbtn" id="btn-gear" title="Настройки">⚙</div>
@@ -309,6 +330,16 @@
     </div>
   </div>
 
+  <div class="sheet" id="sh-events">
+    <div class="card">
+      <h2>Уведомления</h2>
+      <div id="ev-list"></div>
+      <div class="btns">
+        <button class="btn danger" id="ev-clear">Очистить</button>
+        <button class="btn primary" data-close="sh-events">Закрыть</button>
+      </div>
+    </div>
+  </div>
   <div class="sheet" id="sh-settings">
     <div class="card">
       <h2>Панель</h2>
@@ -359,7 +390,9 @@
       <label class="chk"><input type="checkbox" id="s-tone" /> Цветные полоски у блоков</label>
       <label class="chk"><input type="checkbox" id="s-sound" /> Звук при новых событиях</label>
       <div class="field">Громкость звука <span id="s-vol-val"></span><input id="s-vol" type="range" min="0" max="100" step="5" /></div>
+      <div class="field">Звук уведомления<select id="s-snd"></select></div>
       <div class="btns"><button class="btn" id="s-sound-test">Проверить звук</button></div>
+      <div class="hint">Хочешь свой звук — положи файл <b>sound.mp3</b> в папку<br>%APPDATA%\ru.sibtrans.notify\ и выбери «Свой файл».</div>
       <label class="chk"><input type="checkbox" id="s-toast" /> Тост-уведомления Windows</label>
       <label class="chk"><input type="checkbox" id="s-autostart" /> Запускать при входе в Windows</label>
       <div class="field">Важные отправители (почта, через запятую)<input id="s-vip" placeholder="boss@sibtrans.ru, @sibtrans.ru" /></div>
@@ -407,6 +440,16 @@
     });
   }
   let cfg = null, dnd = false, hideTimer = null, audioCtx = null, editing = null, seenComments = 0, busy = false;
+
+  /* любые падения JS — в лог, иначе «нажал и ничего не произошло» */
+  const jlog = t => { try { invoke('js_log', { text: '[' + new Date().toISOString().slice(11, 19) + '] ' + t }); } catch (e) {} };
+  window.addEventListener('error', e => jlog('JS ERR: ' + e.message + ' @' + (e.filename || '') + ':' + e.lineno));
+  window.addEventListener('unhandledrejection', e => {
+    const r = e && e.reason;
+    jlog('PROMISE ERR: ' + ((r && (r.message || r)) || ''));
+    const st = document.getElementById('cfg-status');
+    if (st) st.innerHTML = '<span class="bad">Ошибка сохранения: ' + esc(String((r && (r.message || r)) || '')) + '</span>';
+  });
   let bodyCache = {}, reloadQueued = false;
   let interacting = false, insidePanel = true;   // пока тащим/тянем ручку — панель не прячем
   let interactTimer = null;
@@ -439,33 +482,77 @@
     t = t.replace(/https?:\/\/[^\s"'<>)]+/g, u => { try { return new URL(u).host; } catch (e) { return u.slice(0, 40); } });
     return t.length > 180 ? t.slice(0, 180) + '…' : t;
   }
+  /* ---------- звуки уведомлений: наборы + свой файл ---------- */
+  const SOUNDS = {
+    chime:   { name: 'Чайм (мягкий)',      fn: (n, c) => { n(660, 990, 0, .2, 1); if (c) { n(520, 440, .24, .34, .95); } } },
+    blip:    { name: 'Блип (короткий)',    fn: (n, c) => { n(540, 830, 0, .16, 1); if (c) n(480, 420, .22, .26, .95); } },
+    bell:    { name: 'Колокольчик',        fn: (n, c) => { n(1046, 1046, 0, .5, .9); n(1568, 1568, 0, .38, .35); if (c) { n(880, 880, .3, .6, .8); n(1320, 1320, .3, .45, .3); } } },
+    coin:    { name: 'Монетка',            fn: (n, c) => { n(988, 988, 0, .08, .9); n(1319, 1319, .08, .3, .7); if (c) n(659, 659, .34, .3, .8); } },
+    pop:     { name: 'Поп',                fn: (n, c) => { n(320, 720, 0, .1, 1); if (c) { n(300, 240, .12, .2, .9); } } },
+    techies: { name: 'Techies — мина (ульт)', fn: (n, c) => {
+        // два высоких «пика» мины и низкий взрыв на критичном
+        n(1180, 1180, 0, .07, 1, 'square');
+        n(1180, 1180, .11, .07, .85, 'square');
+        if (c) { n(180, 60, .22, .5, 1, 'triangle'); n(90, 45, .26, .62, .8, 'sine'); }
+        else { n(1180, 1180, .22, .07, .7, 'square'); }
+      } }
+  };
+  let customSound = null; // ArrayBuffer своего файла, если положили рядом с конфигом
+
+  async function loadCustomSound() {
+    try {
+      const bytes = await invoke('sound_file');
+      if (bytes && bytes.length) {
+        customSound = new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' });
+        jlog('custom sound loaded, bytes=' + bytes.length);
+      } else customSound = null;
+    } catch (e) { customSound = null; }
+  }
+
+  function playCustom(critical) {
+    try {
+      if (!customSound) return false;
+      const url = URL.createObjectURL(customSound);
+      const a = new Audio(url);
+      a.volume = Math.max(0.05, Math.min(1, (cfg.sound_vol === undefined ? 90 : cfg.sound_vol) / 100));
+      a.play().catch(() => {});
+      a.onended = () => URL.revokeObjectURL(url);
+      return true;
+    } catch (e) { return false; }
+  }
+
   function beep(sev) {
     if (!cfg || cfg.sound === false || dnd) return;
     try {
+      if (playCustom(sev === 'critical')) return;
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const ctx = audioCtx;
       if (ctx.state === 'suspended') ctx.resume();
-      const vol = Math.max(0, Math.min(1, (cfg.sound_vol === undefined ? 70 : cfg.sound_vol) / 100));
+      const vol = Math.max(0, Math.min(1, (cfg.sound_vol === undefined ? 90 : cfg.sound_vol) / 100));
       if (vol <= 0) return;
       const critical = sev === 'critical';
 
-      // мягкий фильтр — убирает резкий «писк» на высоких
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = critical ? 2200 : 2800;
-      lp.Q.value = 0.6;
-      lp.connect(ctx.destination);
+      lp.frequency.value = critical ? 3600 : 5200;
+      lp.Q.value = 0.5;
+      const master = ctx.createGain();
+      master.gain.value = 1.15;
+      lp.connect(master);
+      master.connect(ctx.destination);
 
-      // нота с плавной атакой и затуханием: без щелчков и без «квадрата»
-      const note = (f1, f2, at, dur, amp) => {
+      // атака/затухание без щелчков
+      const note = (f1, f2, at, dur, amp, wave) => {
         const t = ctx.currentTime + at;
         const o = ctx.createOscillator();
         const g = ctx.createGain();
-        o.type = 'sine';
+        o.type = wave || 'sine';
         o.frequency.setValueAtTime(f1, t);
-        if (f2 && f2 !== f1) o.frequency.exponentialRampToValueAtTime(f2, t + dur * 0.55);
+        if (f2 && f2 !== f1) {
+          try { o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur * 0.6); } catch (e) {}
+        }
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * vol), t + 0.016);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.16 * amp * vol), t + 0.012);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         o.connect(g);
         g.connect(lp);
@@ -473,14 +560,8 @@
         o.stop(t + dur + 0.03);
       };
 
-      if (critical) {
-        // тревожно, но не режет ухо: низкая пара с паузой
-        note(720, 660, 0, 0.24, 0.11);
-        note(520, 470, 0.22, 0.34, 0.10);
-      } else {
-        // мягкий «блип» с подъёмом тона — как у мессенджеров
-        note(540, 830, 0, 0.18, 0.085);
-      }
+      const pack = SOUNDS[cfg.sound_pack] || SOUNDS.chime;
+      pack.fn(note, critical);
     } catch (e) {}
   }
 
@@ -548,7 +629,11 @@
     clock:    { name: 'Часы',         ic: ic('clock'), need: [],      def: { h: 100, w: 0 } }
   };
 
-  const blocks = () => (cfg && cfg.blocks) || [];
+  const blocks = () => {
+    if (!cfg) return [];
+    if (!Array.isArray(cfg.blocks)) cfg.blocks = [];
+    return cfg.blocks;
+  };
 
   function applyStyle() {
     const t = THEMES[cfg.theme] || THEMES.dark;
@@ -1005,6 +1090,28 @@
     beep(critical ? 'critical' : 'normal');
   }
 
+  /* --- центр уведомлений: всё копится в колокольчик, критичное всплывает сразу --- */
+  let events = [];
+  let pendTitles = [], pendTimer = null;
+
+  function drawEvents() {
+    const box = $('ev-list');
+    if (!box) return;
+    box.innerHTML = events.length
+      ? events.map(e => `<div class="ev${e.critical ? ' crit' : ''}">
+          <div class="eh"><span class="en">${esc(e.title)}</span><span class="et">${new Date(e.t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span></div>
+          <div class="eb">${esc(e.body || '')}</div></div>`).join('')
+      : '<div class="evempty">Пока пусто</div>';
+  }
+
+  function pushEvent(kind, title, body, critical) {
+    events.unshift({ t: Date.now(), kind, title, body, critical });
+    if (events.length > 60) events.length = 60;
+    const c = $('bell-cnt');
+    if (c) { c.textContent = events.length > 99 ? '99+' : events.length; c.classList.add('on'); }
+    if ($('sh-events') && $('sh-events').classList.contains('on')) drawEvents();
+  }
+
   function notifyNew(kind, title, items, opts) {
     if (!items || !items.length) return;
     const key = items.slice(0, 5).join('|');
@@ -1012,7 +1119,29 @@
     if (seenKeys[kind] === key) return;
     seenKeys[kind] = key;
     if (first) return;
-    toastNow(title, items.slice(0, 2).join(' · '), opts);
+    const critical = !!(opts && opts.critical);
+    pushEvent(kind, title, items.slice(0, 3).join(' · '), critical);
+    if (critical) {
+      toastNow(title, items.slice(0, 2).join(' · '), opts);
+      return;
+    }
+    // обычные копим 2.5 с и показываем одним тостом вместо пачки
+    pendTitles.push(title);
+    if (pendTimer) return;
+    pendTimer = setTimeout(() => {
+      const list = pendTitles.slice();
+      pendTitles = [];
+      pendTimer = null;
+      if (dnd) return;
+      if (list.length === 1) toastNow(list[0], 'новое событие', {});
+      else toastNow(list.length + ' новых события', list.join(' · '), {});
+    }, 2500);
+  }
+
+  function applyDnd() {
+    const b = $('btn-dnd');
+    if (b) b.classList.toggle('on', !!dnd);
+    if (b) b.title = dnd ? 'Не беспокоить включён (клик — выключить)' : 'Не беспокоить';
   }
 
   async function tasksBlock(b, body, i) {
@@ -1537,7 +1666,6 @@
     if ($('f-webhook')) { cfg.webhook = $('f-webhook').value.trim(); cfg.user_id = parseInt($('f-user').value || '0', 10); }
     if ($('f-mm-url')) { cfg.mm_url = $('f-mm-url').value.trim(); cfg.mm_token = $('f-mm-token').value.trim(); }
     if ($('f-tg')) cfg.tg_token = $('f-tg').value.trim();
-    if ($('f-ics')) b.ics_one = $('f-ics').value.trim();
     if ($('f-calsrc')) {
       item.cal_src = $('f-calsrc').value;
       item.cal_range = ($('f-calrange') || {}).value || 'today';
@@ -1607,7 +1735,12 @@
     $('s-theme').value = cfg.theme || 'dark';
     $('s-accent').value = cfg.accent || '#4aa3ff';
     $('s-blur').checked = cfg.blur !== false;
-    if ($('s-vol')) { $('s-vol').value = (cfg.sound_vol === undefined ? 70 : cfg.sound_vol); $('s-vol-val').textContent = $('s-vol').value + '%'; }
+    if ($('s-vol')) { $('s-vol').value = (cfg.sound_vol === undefined ? 90 : cfg.sound_vol); $('s-vol-val').textContent = $('s-vol').value + '%'; }
+    if ($('s-snd')) {
+      const cur = cfg.sound_pack || 'chime';
+      $('s-snd').innerHTML = Object.keys(SOUNDS).map(k => `<option value="${k}"${k === cur ? ' selected' : ''}>${SOUNDS[k].name}</option>`).join('')
+        + `<option value="custom"${cur === 'custom' ? ' selected' : ''}>Свой файл (sound.mp3)</option>`;
+    }
     if ($('s-tone')) $('s-tone').checked = cfg.block_colors !== false;
     $('s-sound').checked = !!cfg.sound;
     if ($('s-vip')) $('s-vip').value = cfg.vip || '';
@@ -1621,7 +1754,12 @@
   };
   $('s-fs').oninput = () => { $('s-fs-val').textContent = $('s-fs').value + ' px'; };
   if ($('s-vol')) $('s-vol').oninput = () => { $('s-vol-val').textContent = $('s-vol').value + '%'; };
-  if ($('s-sound-test')) $('s-sound-test').onclick = () => { cfg.sound_vol = parseInt(($('s-vol') || {}).value || '70', 10); beep('normal'); };
+  if ($('s-sound-test')) $('s-sound-test').onclick = async () => {
+    cfg.sound_vol = parseInt(($('s-vol') || {}).value || '90', 10);
+    if ($('s-snd')) cfg.sound_pack = $('s-snd').value;
+    if (cfg.sound_pack === 'custom' && !customSound) await loadCustomSound();
+    beep('normal');
+  };
   const tt = $('s-toast-test');
   if ($('s-export')) $('s-export').onclick = async () => {
     try {
@@ -1642,6 +1780,9 @@
       $('s-cfg-status').textContent = 'Загружено, перечитываю…';
       cfg = (await invoke('get_config')) || {};
       if (!cfg.blocks) cfg.blocks = [];
+    dnd = !!cfg.dnd;
+    applyDnd();
+    loadCustomSound();
       applyStyle();
       closeSheet('sh-settings');
       render();
@@ -1669,7 +1810,8 @@
     cfg.theme = $('s-theme').value;
     cfg.accent = $('s-accent').value;
     cfg.blur = $('s-blur').checked;
-    if ($('s-vol')) cfg.sound_vol = parseInt($('s-vol').value || '70', 10);
+    if ($('s-vol')) cfg.sound_vol = parseInt($('s-vol').value || '90', 10);
+    if ($('s-snd')) cfg.sound_pack = $('s-snd').value;
     if ($('s-tone')) cfg.block_colors = $('s-tone').checked;
     cfg.sound = $('s-sound').checked;
     if ($('s-vip')) cfg.vip = $('s-vip').value.trim();

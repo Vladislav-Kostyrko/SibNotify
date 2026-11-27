@@ -87,6 +87,8 @@ pub struct Config {
     pub(crate) block_colors: bool,
     #[serde(default = "d_sound_vol")]
     pub(crate) sound_vol: u32,
+    #[serde(default = "d_sound_pack")]
+    pub(crate) sound_pack: String,
     #[serde(default = "d_true")]
     pub(crate) blur: bool,
     #[serde(default)]
@@ -110,7 +112,9 @@ pub(crate) fn d_panel_radius() -> u32 { 16 }
 
 pub(crate) fn d_card_opacity() -> u8 { 92 }
 
-pub(crate) fn d_sound_vol() -> u32 { 70 }
+pub(crate) fn d_sound_vol() -> u32 { 90 }
+
+pub(crate) fn d_sound_pack() -> String { "chime".to_string() }
 
 pub(crate) fn d_panel_h() -> u32 { 88 }
 
@@ -175,6 +179,7 @@ impl Default for Config {
             card_opacity: d_card_opacity(),
             block_colors: true,
             sound_vol: d_sound_vol(),
+            sound_pack: d_sound_pack(),
             blur: true,
             vip: String::new(),
             dnd: false,
