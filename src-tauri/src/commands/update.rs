@@ -25,58 +25,60 @@ pub(crate) async fn check_update() -> Result<Value, String> {
     let cl = reqwest::Client::builder()
         .user_agent("SibNotify-updater")
         .timeout(Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| e.to_string())?;
-    let resp = cl
-        .get(format!("https://api.github.com/repos/{}/releases/latest", REPO))
-        .send()
-        .await
-        .map_err(|e| format!("сеть: {e}"))?;
-    if !resp.status().is_success() {
-        return Ok(json!({"ok": false, "error": format!("github ответил {}", resp.status().as_u16())}));
-    }
-    let v: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let tag = v.get("tag_name").and_then(|x| x.as_str()).unwrap_or("").to_string();
-    // нужен именно голый SibNotify.exe, а не установщик *-setup.exe
-    let assets = v
-        .get("assets")
-        .and_then(|a| a.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let pick = |name: &str| assets.iter().find(|x| {
-        x.get("name").and_then(|n| n.as_str()).map(|n| n == name).unwrap_or(false)
-    }).cloned();
-    let asset = pick("SibNotify.exe").or_else(|| {
-        assets.iter().find(|x| {
-            x.get("name")
-                .and_then(|n| n.as_str())
-                .map(|n| {
-                    let l = n.to_ascii_lowercase();
-                    l.ends_with(".exe") && !l.contains("setup") && !l.contains("install")
-                })
-                .unwrap_or(false)
-        }).cloned()
-    });
-    let url = asset
-        .as_ref()
-        .and_then(|a| a.get("browser_download_url"))
-        .and_then(|x| x.as_str())
-        .unwrap_or("")
-        .to_string();
-    let size = asset
-        .as_ref()
-        .and_then(|a| a.get("size"))
-        .and_then(|x| x.as_u64())
-        .unwrap_or(0);
+
     let cur = env!("CARGO_PKG_VERSION").to_string();
+    let latest_url = format!("https://github.com/{}/releases/latest", REPO);
+
+    // api.github.com в корпоративной сети отдаёт мусорный DNS (8.8.4.4),
+    // поэтому версию берём из редиректа github.com/releases/latest
+    let mut tag = String::new();
+    if let Ok(r) = cl.head(&latest_url).send().await {
+        if let Some(loc) = r.headers().get("location").and_then(|v| v.to_str().ok()) {
+            if let Some(pos) = loc.rfind("/tag/") {
+                tag = loc[pos + 5..]
+                    .trim_end_matches('/')
+                    .split('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+            }
+        }
+    }
+
+    if tag.is_empty() {
+        // резерв: официальный API
+        let cl2 = reqwest::Client::builder()
+            .user_agent("SibNotify-updater")
+            .timeout(Duration::from_secs(20))
+            .build()
+            .map_err(|e| e.to_string())?;
+        if let Ok(resp) = cl2
+            .get(format!("https://api.github.com/repos/{}/releases/latest", REPO))
+            .send()
+            .await
+        {
+            if let Ok(v) = resp.json::<Value>().await {
+                tag = v.get("tag_name").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            }
+        }
+    }
+
+    if tag.is_empty() {
+        return Ok(json!({"ok": false, "error": "не смог узнать последнюю версию (github недоступен)"}));
+    }
+
+    let url = format!("https://github.com/{}/releases/latest/download/SibNotify.exe", REPO);
     let newer = ver(&tag) > ver(&cur);
     Ok(json!({
         "ok": true,
         "current": cur,
         "latest": tag,
         "url": url,
-        "size": size,
-        "newer": newer && !url.is_empty(),
+        "size": 0,
+        "newer": newer,
     }))
 }
 
