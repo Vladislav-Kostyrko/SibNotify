@@ -114,7 +114,7 @@ pub(crate) fn d_panel_radius() -> u32 { 16 }
 
 pub(crate) fn d_card_opacity() -> u8 { 92 }
 
-pub(crate) fn d_sound_vol() -> u32 { 90 }
+pub(crate) fn d_sound_vol() -> u32 { 85 }
 
 pub(crate) fn d_sound_pack() -> String { "chime".to_string() }
 
